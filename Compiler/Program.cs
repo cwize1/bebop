@@ -119,7 +119,11 @@ namespace Compiler
                     await Log.Error(new CompilerException("No output file was specified."));
                     return 1;
                 }
-                var result = await CompileSchema(GeneratorUtils.ImplementedGenerators[parsedGenerator.Alias], paths, new FileInfo(parsedGenerator.OutputFile), _flags.Namespace ?? "");
+                var result = await CompileSchema(GeneratorUtils.ImplementedGenerators[parsedGenerator.Alias], paths, new FileInfo(parsedGenerator.OutputFile),
+                    new SchemaOptions() {
+                        Namepace = _flags.Namespace ?? "",
+                        GoPkg = _flags.GoPkg ?? "",
+                    });
                 if (result != Ok)
                 {
                     return result;
@@ -132,7 +136,7 @@ namespace Compiler
         {
             try
             {
-                var parser = new SchemaParser(textualSchema, "CheckNameSpace");
+                var parser = new SchemaParser(textualSchema, new SchemaOptions() { Namepace = "CheckNameSpace"});
                 var schema = await parser.Evaluate();
                 schema.Validate();
                 return Ok;
@@ -144,9 +148,9 @@ namespace Compiler
             }
         }
 
-        private static async Task<ISchema> ParseAndValidateSchemas(List<string> schemaPaths, string nameSpace)
+        private static async Task<ISchema> ParseAndValidateSchemas(List<string> schemaPaths, SchemaOptions options)
         {
-            var parser = new SchemaParser(schemaPaths, nameSpace);
+            var parser = new SchemaParser(schemaPaths, options);
             var schema = await parser.Evaluate();
             schema.Validate();
             return schema;
@@ -155,7 +159,7 @@ namespace Compiler
         private static async Task<int> CompileSchema(Func<ISchema, Generator> makeGenerator,
             List<string> schemaPaths,
             FileInfo outputFile,
-            string nameSpace)
+            SchemaOptions options)
         {
             if (outputFile.Directory is not null && !outputFile.Directory.Exists)
             {
@@ -168,7 +172,7 @@ namespace Compiler
 
             try
             {
-                var schema = await ParseAndValidateSchemas(schemaPaths, nameSpace);
+                var schema = await ParseAndValidateSchemas(schemaPaths, options);
                 var generator = makeGenerator(schema);
                 generator.WriteAuxiliaryFiles(outputFile.DirectoryName ?? string.Empty);
                 var compiled = generator.Compile();
@@ -186,7 +190,7 @@ namespace Compiler
         {
             try
             {
-                await ParseAndValidateSchemas(schemaPaths, "CheckNameSpace");
+                await ParseAndValidateSchemas(schemaPaths, new SchemaOptions() { Namepace = "CheckNameSpace" });
                 return Ok;
             }
             catch (Exception e)

@@ -9,18 +9,38 @@ namespace Core.Generators.Go
 {
     public class GoGenerator : Generator
     {
-        public GoGenerator(ISchema schema) : base(schema)
+        public GoGenerator(ISchema schema) :
+            base(schema)
         {
         }
 
         public override string Compile()
         {
-            throw new NotImplementedException();
+            var builder = new IndentedStringBuilder();
+
+            if (string.IsNullOrWhiteSpace(Schema.Options.GoPkg))
+            {
+                throw new Exception("Go requies a package name to be specified.");
+            }
+
+            builder.AppendLine($"package ${Schema.Options.GoPkg}");
+
+            foreach (var definition in Schema.Definitions.Values)
+            {
+                WriteDefinition(builder, definition);
+            }
+
+            return builder.ToString();
         }
 
         public override void WriteAuxiliaryFiles(string outputPath)
         {
-            throw new NotImplementedException();
+            // Nothing to do.
+        }
+
+        private void WriteDefinition(IndentedStringBuilder builder, IDefinition definition)
+        {
+
         }
     }
 }

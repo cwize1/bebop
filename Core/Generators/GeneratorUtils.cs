@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using Core.Generators.CSharp;
 using Core.Generators.Dart;
+using Core.Generators.Go;
 using Core.Generators.TypeScript;
 using Core.Meta.Interfaces;
 
@@ -20,12 +21,14 @@ namespace Core.Generators
             { "ts", s => new TypeScriptGenerator(s) },
             { "cs", s => new CSharpGenerator(s) },
             { "dart", s => new DartGenerator(s) },
+            { "go", s => new GoGenerator(s) },
         };
 
         public static Dictionary<string, string> ImplementedGeneratorNames  = new Dictionary<string, string> {
             { "ts", "TypeScript" },
             { "cs", "C#" },
             { "dart", "Dart" },
+            { "go", "Go" },
         };
 
         /// <summary>

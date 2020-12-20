@@ -130,7 +130,7 @@ struct Library {
 
         try
         {
-            var parser = new SchemaParser(textualSchema, "Bebop.Example");
+            var parser = new SchemaParser(textualSchema, new SchemaOptions() {Namepace = "Bebop.Example"});
             var schema = await parser.Evaluate();
             schema.Validate();
             return new CompilerOutput

@@ -9,13 +9,13 @@ namespace Core.Meta
     /// <inheritdoc/>
     public readonly struct BebopSchema : ISchema
     {
-        public BebopSchema(string nameSpace, Dictionary<string, IDefinition> definitions)
+        public BebopSchema(SchemaOptions options, Dictionary<string, IDefinition> definitions)
         {
-            Namespace = nameSpace;
+            Options = options;
             Definitions = definitions;
         }
         /// <inheritdoc/>
-        public string Namespace { get; }
+        public SchemaOptions Options { get; }
         /// <inheritdoc/>
         public Dictionary<string, IDefinition> Definitions { get; }
 

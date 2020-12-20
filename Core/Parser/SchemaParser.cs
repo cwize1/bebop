@@ -24,7 +24,7 @@ namespace Core.Parser
         /// </summary>
         private readonly HashSet<(Token, Token)> _typeReferences = new HashSet<(Token, Token)>();
         private uint _index;
-        private readonly string _nameSpace;
+        private readonly SchemaOptions _options;
         private Token[] _tokens = new Token[] { };
 
         /// <summary>
@@ -32,10 +32,10 @@ namespace Core.Parser
         /// </summary>
         /// <param name="schemaPaths">The Bebop schema files that will be parsed</param>
         /// <param name="nameSpace"></param>
-        public SchemaParser(List<string> schemaPaths, string nameSpace)
+        public SchemaParser(List<string> schemaPaths, SchemaOptions options)
         {
             _lexer = SchemaLexer.FromSchemaPaths(schemaPaths);
-            _nameSpace = nameSpace;
+            _options = options;
         }
 
         /// <summary>
@@ -43,10 +43,10 @@ namespace Core.Parser
         /// </summary>
         /// <param name="textualSchema">A string representation of a schema.</param>
         /// <param name="nameSpace"></param>
-        public SchemaParser(string textualSchema, string nameSpace)
+        public SchemaParser(string textualSchema, SchemaOptions options)
         {
             _lexer = SchemaLexer.FromTextualSchema(textualSchema);
-            _nameSpace = nameSpace;
+            _options = options;
         }
 
         /// <summary>
@@ -180,7 +180,7 @@ namespace Core.Parser
                     throw new UnrecognizedTypeException(typeToken, definitionToken.Lexeme);
                 }
             }
-            return new BebopSchema(_nameSpace, _definitions);
+            return new BebopSchema(_options, _definitions);
         }
 
         /// <summary>

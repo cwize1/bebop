@@ -165,9 +165,17 @@ namespace Compiler
             "--dart ./cowboy/bebop/HelloWorld.dart", true)]
         public string? DartOutput { get; private set; }
 
+        [CommandLineFlag("go", "Generate Go source code to the specified file",
+            "--go ./cowboy/bebop/HelloWorld.go", true)]
+        public string? GoOutput { get; private set; }
+
         [CommandLineFlag("namespace", "When this option is specified generated code will use namespaces",
             "--lang cs --namespace [package]")]
         public string? Namespace { get; private set; }
+
+        [CommandLineFlag("gopkg", "The package name to use in the generated go file",
+            "--lang go --gopkg [package]")]
+        public string? GoPkg { get; private set; }
 
         [CommandLineFlag("dir", "Parse and generate code from a directory of schemas", "--lang ts --dir [input dir]")]
         public string? SchemaDirectory { get; private set; }
@@ -494,6 +502,10 @@ namespace Compiler
             if (root.TryGetProperty("namespace", out var nameSpaceElement))
             {
                 flagStore.Namespace = nameSpaceElement.GetString();
+            }
+            if (root.TryGetProperty("gopkg", out var gopkgElement))
+            {
+                flagStore.GoPkg = gopkgElement.GetString();
             }
             if (root.TryGetProperty("generators", out var generatorsElement))
             {
