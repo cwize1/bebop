@@ -9,11 +9,13 @@ namespace Core.Generators
         private int Spaces { get; set; }
         private StringBuilder Builder { get; }
         static readonly string[] _newlines = new[] { "\r\n", "\r", "\n" };
+        private char IndentChar { get; set; }
 
-        public IndentedStringBuilder(int spaces = 0)
+        public IndentedStringBuilder(int spaces = 0, char indentChar = ' ')
         {
             Spaces = spaces;
             Builder = new StringBuilder();
+            IndentChar = indentChar;
         }
 
         public IndentedStringBuilder AppendLine()
@@ -23,7 +25,7 @@ namespace Core.Generators
 
         public IndentedStringBuilder AppendLine(string text)
         {
-            var indent = new string(' ', Spaces);
+            var indent = new string(IndentChar, Spaces);
             var lines = text.Split(_newlines, StringSplitOptions.None);
             var indentedLines = lines.Select(x => (indent + x).TrimEnd()).ToArray();
             var indentedText = string.Join(Environment.NewLine, indentedLines).TrimEnd();
