@@ -27,6 +27,16 @@ namespace Core.Generators.Go
             builder.AppendLine($"package {Schema.Options.GoPkg}");
             builder.AppendLine();
 
+            builder.AppendLine("import (");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("bebop \"github.com/RainwayApp/bebop/Runtime/Go\"");
+            builder.AppendLine("\"github.com/google/uuid\"");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine(")");
+            builder.AppendLine();
+
             foreach (var definition in Schema.Definitions.Values)
             {
                 WriteDefinition(builder, definition);
@@ -74,11 +84,7 @@ namespace Core.Generators.Go
         {
             string enumName = definition.Name.ToPascalCase();
 
-            if (!string.IsNullOrWhiteSpace(definition.Documentation))
-            {
-                WriteDocumentation(builder, definition.Documentation, null);
-            }
-
+            WriteDocumentation(builder, definition.Documentation, null);
             builder.AppendLine($"type {enumName} uint32");
             builder.AppendLine();
             builder.AppendLine("const (");
@@ -97,12 +103,30 @@ namespace Core.Generators.Go
 
         private void WriteAggregateTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
         {
-            if (!string.IsNullOrWhiteSpace(definition.Documentation))
+            string structName = definition.Name.ToPascalCase();
+
+            WriteDocumentation(builder, definition.Documentation, null);
+            builder.AppendLine($"type {structName} struct {{");
+            builder.Indent(IndentSpeces);
+
+            foreach (IField field in definition.Fields)
             {
-                WriteDocumentation(builder, definition.Documentation, null);
+                WriteAggregateTypeField(builder, field);
             }
 
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
             builder.AppendLine();
+        }
+
+        private void WriteAggregateTypeField(IndentedStringBuilder builder, IField field)
+        {
+            WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
+
+            string typeName = TypeName(field.Type);
+            string fieldName = field.Name.ToPascalCase();
+
+            builder.AppendLine($"{fieldName} {typeName}");
         }
 
         /// <summary>
@@ -135,6 +159,34 @@ namespace Core.Generators.Go
             {
                 builder.AppendLine($"// Deprecated: {deprecatedMessage}");
             }
+        }
+
+        private string TypeName(TypeBase type)
+        {
+            return type switch
+            {
+                ScalarType st => st.BaseType switch
+                {
+                    BaseType.Bool => "bool",
+                    BaseType.Byte => "byte",
+                    BaseType.UInt32 => "uint32",
+                    BaseType.Int32 => "int32",
+                    BaseType.Float32 => "float32",
+                    BaseType.Float64 => "float64",
+                    BaseType.String => "string",
+                    BaseType.Guid => "uuid.UUID",
+                    BaseType.UInt16 => "uint16",
+                    BaseType.Int16 => "int16",
+                    BaseType.UInt64 => "uint64",
+                    BaseType.Int64 => "int64",
+                    BaseType.Date => "bebop.Timestamp",
+                    _ => throw new ArgumentOutOfRangeException(st.BaseType.ToString())
+                },
+                ArrayType at => $"[]{TypeName(at.MemberType)}",
+                MapType mt => $"map[{TypeName(mt.KeyType)}]{TypeName(mt.ValueType)}",
+                DefinedType dt => dt.Name.ToPascalCase(),
+                _ => throw new InvalidOperationException($"GetTypeName: {type}")
+            };
         }
     }
 }
