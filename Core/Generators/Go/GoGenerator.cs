@@ -2,12 +2,17 @@
 using Core.Meta.Extensions;
 using Core.Meta.Interfaces;
 using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace Core.Generators.Go
 {
     public class GoGenerator : Generator
     {
+        private record NamelessTypeInfo(TypeBase Type, string MangledName);
+
         private const int IndentSpeces = 1;
+        private Dictionary<string, NamelessTypeInfo> _NamelessTypes = new Dictionary<string, NamelessTypeInfo>();
 
         public GoGenerator(ISchema schema) :
             base(schema)
@@ -16,6 +21,8 @@ namespace Core.Generators.Go
 
         public override string Compile()
         {
+            FillNamelessTypes();
+
             // Note: Go strongly prefers the use of tabs over spaces.
             var builder = new IndentedStringBuilder(indentChar: '\t');
 
@@ -42,12 +49,118 @@ namespace Core.Generators.Go
                 WriteDefinition(builder, definition);
             }
 
+            WriteNamelessTypes(builder);
+
             return builder.ToString();
         }
 
         public override void WriteAuxiliaryFiles(string outputPath)
         {
             // Nothing to do.
+        }
+
+        private void FillNamelessTypes()
+        {
+            foreach (var definition in Schema.Definitions.Values)
+            {
+                foreach (IField field in definition.Fields)
+                {
+                    FillNamelessTypes(field.Type);
+                }
+            }
+        }
+
+        private void FillNamelessTypes(TypeBase type)
+        {
+            switch (type)
+            {
+            case ArrayType at:
+                AddNamelessTypeInfo(type);
+                FillNamelessTypes(at.MemberType);
+                break;
+
+            case MapType mt:
+                AddNamelessTypeInfo(type);
+                FillNamelessTypes(mt.KeyType);
+                FillNamelessTypes(mt.ValueType);
+                break;
+            }
+        }
+
+        private void AddNamelessTypeInfo(TypeBase type)
+        {
+            string typename = TypeName(type);
+            if (_NamelessTypes.ContainsKey(typename))
+            {
+                return;
+            }
+
+            string mangledName = GenerateMangledTypeName(typename);
+            _NamelessTypes.Add(typename, new NamelessTypeInfo(type, mangledName));
+        }
+
+        private string GetTypeMangledName(TypeBase type)
+        {
+            return _NamelessTypes[TypeName(type)].MangledName;
+        }
+
+        private static string GenerateMangledTypeName(string typename)
+        {
+            if (string.IsNullOrEmpty(typename))
+            {
+                return typename;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.Append('_');
+
+            for (int i = 0; i < typename.Length;)
+            {
+                for (; i < typename.Length; ++i)
+                {
+                    char c = typename[i];
+                    if (c == '_' || c == '[' || c == ']' || c == '(' || c == ')' || c == '<' || c == '>' || c == '*' || c == '.')
+                    {
+                        break;
+                    }
+
+                    sb.Append(c);
+                }
+
+                if (i >= typename.Length)
+                {
+                    break;
+                }
+
+                sb.Append('_');
+                for (; i < typename.Length; ++i)
+                {
+                    char c = typename[i];
+                    char r = c switch
+                    {
+                        '_' => 'U',
+                        '[' => 'S',
+                        ']' => 's',
+                        '(' => 'R',
+                        ')' => 'r',
+                        '<' => 'C',
+                        '>' => 'c',
+                        '*' => 'P',
+                        '.' => 'p',
+                        _ => c,
+                    };
+
+                    if (c == r)
+                    {
+                        break;
+                    }
+
+                    sb.Append(r);
+                }
+                sb.Append('_');
+            }
+
+            return sb.ToString();
         }
 
         private void WriteDefinition(IndentedStringBuilder builder, IDefinition definition)
@@ -158,6 +271,7 @@ namespace Core.Generators.Go
         ///     bebop.WriteFloat32(out, v.SecondField)
         ///     v.ThirdField.Encode(out)
         ///   }
+        ///   
         /// </summary>
         private void WriteStructEncode(IndentedStringBuilder builder, IDefinition definition)
         {
@@ -185,6 +299,68 @@ namespace Core.Generators.Go
         }
 
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
+        {
+        }
+
+        private void WriteNamelessTypes(IndentedStringBuilder builder)
+        {
+            foreach (var kvp in _NamelessTypes)
+            {
+                switch (kvp.Value.Type)
+                {
+                case ArrayType at:
+                    WriteArrayEncode(builder, kvp.Key, at, kvp.Value.MangledName);
+                    WriteArrayDecode(builder, kvp.Key, at, kvp.Value.MangledName);
+                    break;
+
+                case MapType mt:
+                    WriteMapEncode(builder, kvp.Key, mt, kvp.Value.MangledName);
+                    WriteMapDecode(builder, kvp.Key, mt, kvp.Value.MangledName);
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///   func encode__Ss_string(out []byte, value []string) []byte {
+        ///     out = bebop.WriteArrayLength(len(value))
+        ///     for _, item := range value {
+        ///       out = bebop.WriteString(out, item)
+        ///     }
+        ///     return out
+        ///   }
+        ///   
+        /// </summary>
+        private void WriteArrayEncode(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
+        {
+            builder.AppendLine($"func encode{mangledName}(out []byte, value {typename}) []byte {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("out = bebop.WriteArrayLength(out, len(value))");
+            builder.AppendLine("for _, item := range value {");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine(FieldEncodeString(at.MemberType, "item"));
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine("return out");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+        }
+
+        private void WriteArrayDecode(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
+        {
+        }
+
+        private void WriteMapEncode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
+        {
+        }
+
+        private void WriteMapDecode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
         {
         }
 
@@ -275,8 +451,8 @@ namespace Core.Generators.Go
                     BaseType.Date => $"out = bebop.WriteTimestamp(out, {fieldName})",
                     _ => throw new ArgumentOutOfRangeException(st.BaseType.ToString())
                 },
-                ArrayType at => "",
-                MapType mt => "",
+                ArrayType at => $"out = encode{GetTypeMangledName(type)}(out, {fieldName})",
+                MapType mt => $"out = encode{GetTypeMangledName(type)}(out, {fieldName})",
                 DefinedType dt when IsEnum(dt) => $"out = bebop.WriteUInt32(out, uint32({fieldName}))",
                 DefinedType dt => $"out = {fieldName}.Encode(out)",
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")

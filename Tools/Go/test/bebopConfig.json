@@ -1,0 +1,20 @@
+{
+    "inputFiles": [
+        "../../../Laboratory/Schemas/array_of_strings.bop",
+        "../../../Laboratory/Schemas/basic_arrays.bop",
+        "../../../Laboratory/Schemas/basic_types.bop",
+        "../../../Laboratory/Schemas/documentation.bop",
+        "../../../Laboratory/Schemas/jazz.bop",
+        "../../../Laboratory/Schemas/lab.bop",
+        "../../../Laboratory/Schemas/map_types.bop",
+        "../../../Laboratory/Schemas/msgpack_comparison.bop",
+        "../../../Laboratory/Schemas/request.bop"
+    ],
+    "generators": [
+        {
+            "alias": "go",
+            "outputFile": "generated/generated.go"
+        }
+    ],
+    "gopkg": "generated"
+}

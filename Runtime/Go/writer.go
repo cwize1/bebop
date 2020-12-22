@@ -77,11 +77,17 @@ func WriteGUID(out []byte, value uuid.UUID) []byte {
 
 // WriteString writes a string value.
 func WriteString(out []byte, value string) []byte {
-	out = WriteUInt32(out, uint32(len(value)))
-	return append(out, value...)
+	return WriteByteArray(out, []byte(value))
 }
 
 // WriteByteArray writes an array of bytes.
 func WriteByteArray(out []byte, value []byte) []byte {
-	return append(out, value...)
+	out = WriteArrayLength(out, len(value))
+	out = append(out, value...)
+	return out
+}
+
+// WriteArrayLength writes the length prefix for an array.
+func WriteArrayLength(out []byte, length int) []byte {
+	return WriteUInt32(out, uint32(length))
 }
