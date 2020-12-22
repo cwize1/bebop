@@ -1,6 +1,7 @@
 package bebop
 
 import (
+	"encoding/binary"
 	"math"
 
 	"github.com/google/uuid"
@@ -90,4 +91,15 @@ func WriteByteArray(out []byte, value []byte) []byte {
 // WriteArrayLength writes the length prefix for an array.
 func WriteArrayLength(out []byte, length int) []byte {
 	return WriteUInt32(out, uint32(length))
+}
+
+// WriteMessageLengthPlaceholder writes a placeholder for the message length.
+func WriteMessageLengthPlaceholder(out []byte) []byte {
+	return WriteUInt32(out, 0)
+}
+
+// WriteMessageLength fills in the message length placeholder.
+func WriteMessageLength(out []byte, placeholder []byte) {
+	messageLength := len(out) - len(placeholder)
+	binary.LittleEndian.PutUint32(placeholder, uint32(messageLength))
 }

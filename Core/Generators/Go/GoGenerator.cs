@@ -272,9 +272,10 @@ namespace Core.Generators.Go
         /// Example output:
         ///
         ///   func (v *SomeClass) Encode(out []byte) []byte {
-        ///     bebop.WriteBool(out, v.FirstField)
-        ///     bebop.WriteFloat32(out, v.SecondField)
-        ///     v.ThirdField.Encode(out)
+        ///     out = bebop.WriteBool(out, v.FirstField)
+        ///     out = bebop.WriteFloat32(out, v.SecondField)
+        ///     out = v.ThirdField.Encode(out)
+        ///     return out
         ///   }
         ///   
         /// </summary>
@@ -299,8 +300,43 @@ namespace Core.Generators.Go
         {
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///   func (v *SomeClass) Encode(out []byte) []byte {
+        ///     lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)
+        ///     out = lengthPlaceholder
+        ///     out = bebop.WriteByte(out, 1)
+        ///     out = bebop.WriteBool(out, v.FirstField)
+        ///     out = bebop.WriteByte(out, 2)
+        ///     out = bebop.WriteFloat32(out, v.SecondField)
+        ///     out = bebop.WriteByte(out, 3)
+        ///     out = v.ThirdField.Encode(out)
+        ///     bebop.WriteMessageLength(out, lengthPlaceholder)
+        ///     return out
+        ///   }
+        ///   
+        /// </summary>
         private void WriteMessageEncode(IndentedStringBuilder builder, IDefinition definition)
         {
+            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)");
+            builder.AppendLine("out = lengthPlaceholder");
+
+            foreach (IField field in definition.Fields)
+            {
+                builder.AppendLine($"out = bebop.WriteByte(out, {field.ConstantValue})");
+                builder.AppendLine(FieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+            }
+
+            builder.AppendLine("bebop.WriteMessageLength(out, lengthPlaceholder)");
+            builder.AppendLine("return out");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
