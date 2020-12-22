@@ -62,7 +62,7 @@ func WriteFloat64(out []byte, value float64) []byte {
 
 // WriteTimestamp writes a bebop.Timestamp value.
 func WriteTimestamp(out []byte, value Timestamp) []byte {
-	return WriteInt64(out, value.Ticks)
+	return WriteInt64(out, int64(value))
 }
 
 // WriteGUID writes a UUID value.

@@ -101,7 +101,7 @@ func ReadFloat64(in []byte) (value float64, num int) {
 // ReadTimestamp reads a bebop.Timestamp value.
 func ReadTimestamp(in []byte) (value Timestamp, num int) {
 	v, n := ReadInt64(in)
-	return Timestamp{Ticks: v}, n
+	return Timestamp(v), n
 }
 
 // ReadGUID reads a UUID value.
