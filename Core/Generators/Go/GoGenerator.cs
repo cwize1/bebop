@@ -46,10 +46,15 @@ namespace Core.Generators.Go
 
             foreach (var definition in Schema.Definitions.Values)
             {
-                WriteDefinition(builder, definition);
+                WriteTypeDefinition(builder, definition);
             }
 
-            WriteNamelessTypes(builder);
+            foreach (var definition in Schema.Definitions.Values)
+            {
+                WriteAggregateTypeFunctions(builder, definition);
+            }
+
+            WriteNamelessTypesFunctions(builder);
 
             return builder.ToString();
         }
@@ -163,7 +168,7 @@ namespace Core.Generators.Go
             return sb.ToString();
         }
 
-        private void WriteDefinition(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
         {
             switch (definition.Kind)
             {
@@ -173,7 +178,7 @@ namespace Core.Generators.Go
 
             case AggregateKind.Message:
             case AggregateKind.Struct:
-                WriteAggregateType(builder, definition);
+                WriteAggregateTypeDefinition(builder, definition);
                 break;
             }
         }
@@ -214,19 +219,19 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
-        private void WriteAggregateType(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteAggregateTypeFunctions(IndentedStringBuilder builder, IDefinition definition)
         {
-            WriteAggregateTypeDefinition(builder, definition);
-
-            if (definition.Kind == AggregateKind.Struct)
+            switch (definition.Kind)
             {
+            case AggregateKind.Struct:
                 WriteStructEncode(builder, definition);
                 WriteStructDecode(builder, definition);
-            }
-            else
-            {
+                break;
+
+            case AggregateKind.Message:
                 WriteMessageEncode(builder, definition);
                 WriteMessageDecode(builder, definition);
+                break;
             }
         }
 
@@ -302,7 +307,7 @@ namespace Core.Generators.Go
         {
         }
 
-        private void WriteNamelessTypes(IndentedStringBuilder builder)
+        private void WriteNamelessTypesFunctions(IndentedStringBuilder builder)
         {
             foreach (var kvp in _NamelessTypes)
             {
@@ -356,8 +361,37 @@ namespace Core.Generators.Go
         {
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///   func encode__S_string_s_int32(out []byte, value map[string]int32) []byte {
+        ///     out = bebop.WriteArrayLength(len(value))
+        ///     for key, value := range value {
+        ///       out = bebop.WriteString(out, key)
+        ///       out = bebop.WriteInt32(out, value)
+        ///     }
+        ///     return out
+        ///   }
+        ///   
+        /// </summary>
         private void WriteMapEncode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
         {
+            builder.AppendLine($"func encode{mangledName}(out []byte, value {typename}) []byte {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("out = bebop.WriteArrayLength(out, len(value))");
+            builder.AppendLine("for key, value := range value {");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine(FieldEncodeString(mt.KeyType, "key"));
+            builder.AppendLine(FieldEncodeString(mt.ValueType, "value"));
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine("return out");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
         }
 
         private void WriteMapDecode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
