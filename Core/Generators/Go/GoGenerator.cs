@@ -60,7 +60,7 @@ namespace Core.Generators.Go
 
             case AggregateKind.Message:
             case AggregateKind.Struct:
-                WriteAggregateTypeDefinition(builder, definition);
+                WriteAggregateType(builder, definition);
                 break;
             }
         }
@@ -101,6 +101,32 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
+        private void WriteAggregateType(IndentedStringBuilder builder, IDefinition definition)
+        {
+            WriteAggregateTypeDefinition(builder, definition);
+
+            if (definition.Kind == AggregateKind.Struct)
+            {
+                WriteStructEncode(builder, definition);
+                WriteStructDecode(builder, definition);
+            }
+            else
+            {
+                WriteMessageEncode(builder, definition);
+                WriteMessageDecode(builder, definition);
+            }
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///   type SomeType struct {
+        ///     FirstField string
+        ///     SecondField int32
+        ///     ThirdField *AnotherType
+        ///   }
+        ///   
+        /// </summary>
         private void WriteAggregateTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
         {
             string structName = definition.Name.ToPascalCase();
@@ -111,7 +137,12 @@ namespace Core.Generators.Go
 
             foreach (IField field in definition.Fields)
             {
-                WriteAggregateTypeField(builder, field);
+                WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
+
+                string typeName = TypeName(field.Type);
+                string fieldName = field.Name.ToPascalCase();
+
+                builder.AppendLine($"{fieldName} {typeName}");
             }
 
             builder.Dedent(IndentSpeces);
@@ -119,14 +150,42 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
-        private void WriteAggregateTypeField(IndentedStringBuilder builder, IField field)
+        /// <summary>
+        /// Example output:
+        ///
+        ///   func (v *SomeClass) Encode(out []byte) []byte {
+        ///     bebop.WriteBool(out, v.FirstField)
+        ///     bebop.WriteFloat32(out, v.SecondField)
+        ///     v.ThirdField.Encode(out)
+        ///   }
+        /// </summary>
+        private void WriteStructEncode(IndentedStringBuilder builder, IDefinition definition)
         {
-            WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
+            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
+            builder.Indent(IndentSpeces);
 
-            string typeName = TypeName(field.Type);
-            string fieldName = field.Name.ToPascalCase();
+            foreach (IField field in definition.Fields)
+            {
+                builder.AppendLine(FieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+            }
 
-            builder.AppendLine($"{fieldName} {typeName}");
+            builder.AppendLine("return out");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        private void WriteStructDecode(IndentedStringBuilder builder, IDefinition definition)
+        {
+        }
+
+        private void WriteMessageEncode(IndentedStringBuilder builder, IDefinition definition)
+        {
+        }
+
+        private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
+        {
         }
 
         /// <summary>
@@ -169,22 +228,57 @@ namespace Core.Generators.Go
                 {
                     BaseType.Bool => "bool",
                     BaseType.Byte => "byte",
+                    BaseType.UInt16 => "uint16",
+                    BaseType.Int16 => "int16",
                     BaseType.UInt32 => "uint32",
                     BaseType.Int32 => "int32",
+                    BaseType.UInt64 => "uint64",
+                    BaseType.Int64 => "int64",
                     BaseType.Float32 => "float32",
                     BaseType.Float64 => "float64",
                     BaseType.String => "string",
                     BaseType.Guid => "uuid.UUID",
-                    BaseType.UInt16 => "uint16",
-                    BaseType.Int16 => "int16",
-                    BaseType.UInt64 => "uint64",
-                    BaseType.Int64 => "int64",
                     BaseType.Date => "bebop.Timestamp",
                     _ => throw new ArgumentOutOfRangeException(st.BaseType.ToString())
                 },
                 ArrayType at => $"[]{TypeName(at.MemberType)}",
                 MapType mt => $"map[{TypeName(mt.KeyType)}]{TypeName(mt.ValueType)}",
-                DefinedType dt => dt.Name.ToPascalCase(),
+                DefinedType dt when IsEnum(dt) => dt.Name.ToPascalCase(),
+                DefinedType dt => $"*{dt.Name.ToPascalCase()}",
+                _ => throw new InvalidOperationException($"GetTypeName: {type}")
+            };
+        }
+
+        private bool IsEnum(DefinedType dt)
+        {
+            return Schema.Definitions[dt.Name].Kind == AggregateKind.Enum;
+        }
+
+        private string FieldEncodeString(TypeBase type, string fieldName)
+        {
+            return type switch
+            {
+                ScalarType st => st.BaseType switch
+                {
+                    BaseType.Bool => $"out = bebop.WriteBool(out, {fieldName})",
+                    BaseType.Byte => $"out = bebop.WriteByte(out, {fieldName})",
+                    BaseType.UInt16 => $"out = bebop.WriteUInt16(out, {fieldName})",
+                    BaseType.Int16 => $"out = bebop.WriteInt16(out, {fieldName})",
+                    BaseType.UInt32 => $"out = bebop.WriteUInt32(out, {fieldName})",
+                    BaseType.Int32 => $"out = bebop.WriteInt32(out, {fieldName})",
+                    BaseType.UInt64 => $"out = bebop.WriteUInt64(out, {fieldName})",
+                    BaseType.Int64 => $"out = bebop.WriteInt64(out, {fieldName})",
+                    BaseType.Float32 => $"out = bebop.WriteFloat32(out, {fieldName})",
+                    BaseType.Float64 => $"out = bebop.WriteFloat64(out, {fieldName})",
+                    BaseType.String => $"out = bebop.WriteString(out, {fieldName})",
+                    BaseType.Guid => $"out = bebop.WriteGUID(out, {fieldName})",
+                    BaseType.Date => $"out = bebop.WriteTimestamp(out, {fieldName})",
+                    _ => throw new ArgumentOutOfRangeException(st.BaseType.ToString())
+                },
+                ArrayType at => "",
+                MapType mt => "",
+                DefinedType dt when IsEnum(dt) => $"out = bebop.WriteUInt32(out, uint32({fieldName}))",
+                DefinedType dt => $"out = {fieldName}.Encode(out)",
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
             };
         }
