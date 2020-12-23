@@ -12,7 +12,7 @@ namespace Core.Generators.Go
         // Go strongly prefers the use of tabs over spaces.
         private const char IndentChar = '\t'; 
 
-        private const int IndentSpeces = 1;
+        private const int IndentChars = 1;
 
         private record NamelessTypeInfo(TypeBase Type, string MangledName);
         private Dictionary<string, NamelessTypeInfo> _NamelessTypes = new Dictionary<string, NamelessTypeInfo>();
@@ -42,7 +42,7 @@ namespace Core.Generators.Go
             builder.AppendLine();
 
             builder.AppendLine("import (");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("bebop \"github.com/RainwayApp/bebop/Runtime/Go\"");
 
@@ -52,7 +52,7 @@ namespace Core.Generators.Go
                 builder.AppendLine("\"github.com/google/uuid\"");
             }
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine(")");
             builder.AppendLine();
 
@@ -227,7 +227,7 @@ namespace Core.Generators.Go
             builder.AppendLine($"type {enumName} uint32");
             builder.AppendLine();
             builder.AppendLine("const (");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             foreach (IField field in definition.Fields)
             {
@@ -235,7 +235,7 @@ namespace Core.Generators.Go
                 builder.AppendLine($"{enumName}_{field.Name.ToPascalCase()} {enumName} = {field.ConstantValue}");
             }
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine(")");
             builder.AppendLine();
         }
@@ -275,7 +275,7 @@ namespace Core.Generators.Go
 
             WriteDocumentation(builder, definition.Documentation, null);
             builder.AppendLine($"type {structName} struct {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             foreach (IField field in definition.Fields)
             {
@@ -287,7 +287,7 @@ namespace Core.Generators.Go
                 builder.AppendLine($"{fieldName} {typeName}");
             }
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -306,7 +306,7 @@ namespace Core.Generators.Go
         private void WriteStructEncode(IndentedStringBuilder builder, IDefinition definition)
         {
             builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             foreach (IField field in definition.Fields)
             {
@@ -315,7 +315,7 @@ namespace Core.Generators.Go
 
             builder.AppendLine("return out");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -344,21 +344,19 @@ namespace Core.Generators.Go
         private void WriteStructDecode(IndentedStringBuilder builder, IDefinition definition)
         {
             builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("var err error");
 
             foreach (IField field in definition.Fields)
             {
                 builder.AppendLine(FieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
-                builder.AppendLine("if err != nil {");
-                builder.AppendLine(IndentChar + "return in, err");
-                builder.AppendLine("}");
+                builder.AppendLine("if err != nil {\n\treturn in, err\n}");
             }
 
             builder.AppendLine("return in, nil");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -390,7 +388,7 @@ namespace Core.Generators.Go
         private void WriteMessageEncode(IndentedStringBuilder builder, IDefinition definition)
         {
             builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)");
             builder.AppendLine("out = lengthPlaceholder");
@@ -398,12 +396,12 @@ namespace Core.Generators.Go
             foreach (IField field in definition.Fields)
             {
                 builder.AppendLine($"if v.{field.Name.ToPascalCase()} != nil {{");
-                builder.Indent(IndentSpeces);
+                builder.Indent(IndentChars);
 
                 builder.AppendLine($"out = bebop.WriteByte(out, {field.ConstantValue})");
                 builder.AppendLine(OptionalFieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
 
-                builder.Dedent(IndentSpeces);
+                builder.Dedent(IndentChars);
                 builder.AppendLine("}");
             }
 
@@ -411,7 +409,7 @@ namespace Core.Generators.Go
             builder.AppendLine("bebop.WriteMessageLength(out, lengthPlaceholder)");
             builder.AppendLine("return out");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -464,7 +462,7 @@ namespace Core.Generators.Go
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
         {
             builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("var err error");
             builder.AppendLine("var messageLength int");
@@ -473,7 +471,7 @@ namespace Core.Generators.Go
             builder.AppendLine("bodyStart := in");
             builder.AppendLine("Loop:");
             builder.AppendLine("for {");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("var tag byte");
             builder.AppendLine("tag, in, err = bebop.ReadByte(in)");
@@ -483,19 +481,19 @@ namespace Core.Generators.Go
             foreach (IField field in definition.Fields)
             {
                 builder.AppendLine($"case {field.ConstantValue}:");
-                builder.Indent(IndentSpeces);
+                builder.Indent(IndentChars);
 
                 builder.AppendLine(OptionalFieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
                 builder.AppendLine("if err != nil {\n\treturn in, err\n}");
 
-                builder.Dedent(IndentSpeces);
+                builder.Dedent(IndentChars);
             }
 
             builder.AppendLine("default:");
             builder.AppendLine("\tbreak Loop");
             builder.AppendLine("}");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
 
             builder.AppendLine("if len(bodyStart)-len(in) > messageLength {");
@@ -504,7 +502,7 @@ namespace Core.Generators.Go
 
             builder.AppendLine("return in, nil");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -543,19 +541,19 @@ namespace Core.Generators.Go
         private void WriteArrayEncode(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
         {
             builder.AppendLine($"func encode{mangledName}(out []byte, value {typename}) []byte {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("out = bebop.WriteArrayLength(out, len(value))");
             builder.AppendLine("for _, item := range value {");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine(FieldEncodeString(at.MemberType, "item"));
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return out");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -582,27 +580,23 @@ namespace Core.Generators.Go
         private void WriteArrayDecode(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
         {
             builder.AppendLine($"func decode{mangledName}(in []byte) ({typename}, []byte, error) {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("arrayLength, in, err := bebop.ReadArrayLength(in)");
-            builder.AppendLine("if err != nil {");
-            builder.AppendLine(IndentChar + "return nil, in, err");
-            builder.AppendLine("}");
+            builder.AppendLine("if err != nil {\n\treturn nil, in, err\n}");
 
             builder.AppendLine($"v := make({typename}, arrayLength)");
             builder.AppendLine("for i := 0; i < arrayLength; i++ {");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine(FieldDecodeString(at.MemberType, $"v[i]"));
-            builder.AppendLine("if err != nil {");
-            builder.AppendLine(IndentChar + "return nil, in, err");
-            builder.AppendLine("}");
+            builder.AppendLine("if err != nil {\n\treturn nil, in, err\n}");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return v, in, nil");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -623,20 +617,20 @@ namespace Core.Generators.Go
         private void WriteMapEncode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
         {
             builder.AppendLine($"func encode{mangledName}(out []byte, value {typename}) []byte {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("out = bebop.WriteArrayLength(out, len(value))");
             builder.AppendLine("for key, value := range value {");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine(FieldEncodeString(mt.KeyType, "key"));
             builder.AppendLine(FieldEncodeString(mt.ValueType, "value"));
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return out");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
@@ -670,36 +664,30 @@ namespace Core.Generators.Go
         private void WriteMapDecode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
         {
             builder.AppendLine($"func decode{mangledName}(in []byte) ({typename}, []byte, error) {{");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine("arrayLength, in, err := bebop.ReadArrayLength(in)");
-            builder.AppendLine("if err != nil {");
-            builder.AppendLine(IndentChar + "return nil, in, err");
-            builder.AppendLine("}");
+            builder.AppendLine("if err != nil {\n\treturn nil, in, err\n}");
 
             builder.AppendLine($"v := make({typename})");
             builder.AppendLine("for i := 0; i < arrayLength; i++ {");
-            builder.Indent(IndentSpeces);
+            builder.Indent(IndentChars);
 
             builder.AppendLine($"var key {TypeName(mt.KeyType)}");
             builder.AppendLine(FieldDecodeString(mt.KeyType, $"key"));
-            builder.AppendLine("if err != nil {");
-            builder.AppendLine(IndentChar + "return nil, in, err");
-            builder.AppendLine("}");
+            builder.AppendLine("if err != nil {\n\treturn nil, in, err\n}");
 
             builder.AppendLine($"var value {TypeName(mt.ValueType)}");
             builder.AppendLine(FieldDecodeString(mt.ValueType, $"value"));
-            builder.AppendLine("if err != nil {");
-            builder.AppendLine(IndentChar + "return nil, in, err");
-            builder.AppendLine("}");
+            builder.AppendLine("if err != nil {\n\treturn nil, in, err\n}");
 
             builder.AppendLine("v[key] = value");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return v, in, nil");
 
-            builder.Dedent(IndentSpeces);
+            builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine();
         }
