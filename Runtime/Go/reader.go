@@ -12,8 +12,17 @@ var (
 	// ErrUnexpectedEOF means not enough bytes were available for the type.
 	ErrUnexpectedEOF = errors.New("unexpected end of file")
 
-	// ArrayTooLong means the string or array value is too long for the system.
+	// ErrArrayTooLong means the string or array value is too long for the system.
 	ErrArrayTooLong = errors.New("array too long")
+
+	// ErrMessageBodyTooLong means the message body length is too long for the system.
+	ErrMessageBodyTooLong = errors.New("message body too long")
+
+	// ErrMessageBodyLengthEOF means the specified message size would go passed the end of file.
+	ErrMessageBodyLengthEOF = errors.New("message length passed end of file")
+
+	// ErrMessageBodyOverrun means the message's body didn't terminate within the length specified.
+	ErrMessageBodyOverrun = errors.New("message body went passed the specified length")
 )
 
 // ReadBool reads a bool value.
@@ -166,4 +175,24 @@ func ReadArrayLength(in []byte) (int, []byte, error) {
 	}
 
 	return int(arrayLength), in, nil
+}
+
+// ReadMessageLength reads the length of a message.
+func ReadMessageLength(in []byte) (int, []byte, error) {
+	arrayLength, in, err := ReadUInt32(in)
+	if err != nil {
+		return 0, in, err
+	}
+
+	if bits.UintSize == 32 && arrayLength > uint32(math.MaxInt32) {
+		return 0, in, ErrMessageBodyTooLong
+	}
+
+	arrayLengthInt := int(arrayLength)
+
+	if arrayLengthInt > len(in) {
+		return 0, in, ErrMessageBodyLengthEOF
+	}
+
+	return arrayLengthInt, in, nil
 }

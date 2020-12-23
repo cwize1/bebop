@@ -305,15 +305,15 @@ namespace Core.Generators.Go
         ///     var err error
         ///     v.FirstField, in, err = bebop.ReadBool(in)
         ///     if err != nil {
-        //          return in, err
+        ///         return in, err
         ///     }
         ///     v.SecondField, in, err = bebop.WriteFloat32(in)
         ///     if err != nil {
-        //          return in, err
+        ///         return in, err
         ///     }
         ///     in, err = v.ThirdField.Encode(out)
         ///     if err != nil {
-        //          return in, err
+        ///         return in, err
         ///     }
         ///     return in, nil
         ///   }
@@ -353,6 +353,7 @@ namespace Core.Generators.Go
         ///     out = bebop.WriteFloat32(out, v.SecondField)
         ///     out = bebop.WriteByte(out, 3)
         ///     out = v.ThirdField.Encode(out)
+        ///     out = bebop.WriteByte(out, 0)
         ///     bebop.WriteMessageLength(out, lengthPlaceholder)
         ///     return out
         ///   }
@@ -372,6 +373,7 @@ namespace Core.Generators.Go
                 builder.AppendLine(FieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
             }
 
+            builder.AppendLine("out = bebop.WriteByte(out, 0)");
             builder.AppendLine("bebop.WriteMessageLength(out, lengthPlaceholder)");
             builder.AppendLine("return out");
 
@@ -380,6 +382,51 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func (v *SomeClass) Decode(in []byte) ([]byte, error) {
+        ///         var err error
+        ///         var messageLength uint32
+        ///         messageLength, in, err = bebop.ReadMessageLength(in)
+        ///         if err != nil {
+        ///             return in, err
+        ///         }
+        ///         bodyStart := in
+        ///         Loop:
+        ///         for {
+        ///             var tag byte
+        ///             tag, in, err = bebop.ReadByte(in)
+        ///             if err != nil {
+        ///                 return in, err
+        ///             }
+        ///             switch c {
+        ///             case 1:
+        ///                 v.FirstField, in, err = bebop.ReadBool(in)
+        ///                 if err != nil {
+        ///                     return in, err
+        ///                 }
+        ///             case 2:
+        ///                 v.SecondField, in, err = bebop.WriteFloat32(in)
+        ///                 if err != nil {
+        ///                     return in, err
+        ///                 }
+        ///             case 3:
+        ///                 in, err = v.ThirdField.Encode(out)
+        ///                 if err != nil {
+        ///                     return in, err
+        ///                 }
+        ///             default:
+        ///                 break Loop
+        ///             }
+        ///         }
+        ///         if len(bodyStart) - len(in) > messageLength {
+        ///             return in, bebop.ErrMessageBodyOverrun
+        ///         }
+        ///         return in, nil
+        ///     }
+        ///     
+        /// </summary>
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
         {
         }
@@ -432,6 +479,7 @@ namespace Core.Generators.Go
 
             builder.Dedent(IndentSpeces);
             builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         /// <summary>
@@ -478,6 +526,7 @@ namespace Core.Generators.Go
 
             builder.Dedent(IndentSpeces);
             builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         /// <summary>
@@ -511,10 +560,70 @@ namespace Core.Generators.Go
 
             builder.Dedent(IndentSpeces);
             builder.AppendLine("}");
+            builder.AppendLine();
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func decode_map_S_string_s_int32(in []byte) (value map[string]int32, []byte, error)  {
+        ///         arrayLength, in, err := bebop.ReadArrayLength(in)
+        ///         if err != nil {
+        ///             return nil, in, err
+        ///         }
+        ///         v := make(map[string]int32)
+        ///         for i := 0; i < arrayLength; i++ {
+        ///             var key string
+        ///             key, in, err = bebop.ReadString(in)
+        ///             if err != nil {
+        ///                 return nil, in, err
+        ///             }
+        ///             var value int32
+        ///             value, in, err = bebop.ReadInt32(in)
+        ///             if err != nil {
+        ///                 return nil, in, err
+        ///             }
+        ///             v[key] = value
+        ///         }
+        ///         return v, in, nil
+        ///     }
+        ///     
+        /// </summary>
         private void WriteMapDecode(IndentedStringBuilder builder, string typename, MapType mt, string mangledName)
         {
+            builder.AppendLine($"func decode{mangledName}(in []byte) ({typename}, []byte, error) {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("arrayLength, in, err := bebop.ReadArrayLength(in)");
+            builder.AppendLine("if err != nil {");
+            builder.AppendLine(IndentChar + "return nil, in, err");
+            builder.AppendLine("}");
+
+            builder.AppendLine($"v := make({typename})");
+            builder.AppendLine("for i := 0; i < arrayLength; i++ {");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine($"var key {TypeName(mt.KeyType)}");
+            builder.AppendLine(FieldDecodeString(mt.KeyType, $"key"));
+            builder.AppendLine("if err != nil {");
+            builder.AppendLine(IndentChar + "return nil, in, err");
+            builder.AppendLine("}");
+
+            builder.AppendLine($"var value {TypeName(mt.ValueType)}");
+            builder.AppendLine(FieldDecodeString(mt.ValueType, $"value"));
+            builder.AppendLine("if err != nil {");
+            builder.AppendLine(IndentChar + "return nil, in, err");
+            builder.AppendLine("}");
+
+            builder.AppendLine("v[key] = value");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine("return v, in, nil");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         /// <summary>
