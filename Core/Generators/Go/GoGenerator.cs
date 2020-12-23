@@ -387,7 +387,7 @@ namespace Core.Generators.Go
         ///
         ///     func (v *SomeClass) Decode(in []byte) ([]byte, error) {
         ///         var err error
-        ///         var messageLength uint32
+        ///         var messageLength int
         ///         messageLength, in, err = bebop.ReadMessageLength(in)
         ///         if err != nil {
         ///             return in, err
@@ -400,7 +400,7 @@ namespace Core.Generators.Go
         ///             if err != nil {
         ///                 return in, err
         ///             }
-        ///             switch c {
+        ///             switch tag {
         ///             case 1:
         ///                 v.FirstField, in, err = bebop.ReadBool(in)
         ///                 if err != nil {
@@ -429,6 +429,50 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
         {
+            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("var err error");
+            builder.AppendLine("var messageLength int");
+            builder.AppendLine("messageLength, in, err = bebop.ReadMessageLength(in)");
+            builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+            builder.AppendLine("bodyStart := in");
+            builder.AppendLine("Loop:");
+            builder.AppendLine("for {");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("var tag byte");
+            builder.AppendLine("tag, in, err = bebop.ReadByte(in)");
+            builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+            builder.AppendLine("switch tag {");
+
+            foreach (IField field in definition.Fields)
+            {
+                builder.AppendLine($"case {field.ConstantValue}:");
+                builder.Indent(IndentSpeces);
+
+                builder.AppendLine(FieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+
+                builder.Dedent(IndentSpeces);
+            }
+
+            builder.AppendLine("default:");
+            builder.AppendLine("\tbreak Loop");
+            builder.AppendLine("}");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+
+            builder.AppendLine("if len(bodyStart) - len(in) > messageLength {");
+            builder.AppendLine("\treturn in, bebop.ErrMessageBodyOverrun");
+            builder.AppendLine("}");
+
+            builder.AppendLine("return in, nil");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         private void WriteNamelessTypesFunctions(IndentedStringBuilder builder)
@@ -744,8 +788,8 @@ namespace Core.Generators.Go
                 },
                 ArrayType at => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
                 MapType mt => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
-                DefinedType dt when IsEnum(dt) => $"{{ var tmp uint32; tmp, in, err = bebop.ReadUInt32(in); {fieldName} = {dt.Name}(tmp); }}",
-                DefinedType dt => $"in, err = {fieldName}.Decode(in)",
+                DefinedType dt when IsEnum(dt) => $"{{\n\tvar tmp uint32\n\ttmp, in, err = bebop.ReadUInt32(in)\n\t{fieldName} = {dt.Name}(tmp)\n}}",
+                DefinedType dt => $"{fieldName} = &{dt.Name}{{}}\nin, err = {fieldName}.Decode(in)",
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
             };
         }
