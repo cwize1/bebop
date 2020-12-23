@@ -3,6 +3,7 @@ using Core.Meta.Extensions;
 using Core.Meta.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace Core.Generators.Go
@@ -221,7 +222,7 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteEnumDefinition(IndentedStringBuilder builder, IDefinition definition)
         {
-            string enumName = definition.Name.ToPascalCase();
+            string enumName = StyleName(definition.Name);
 
             WriteDocumentation(builder, definition.Documentation, null);
             builder.AppendLine($"type {enumName} uint32");
@@ -232,7 +233,7 @@ namespace Core.Generators.Go
             foreach (IField field in definition.Fields)
             {
                 WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
-                builder.AppendLine($"{enumName}_{field.Name.ToPascalCase()} {enumName} = {field.ConstantValue}");
+                builder.AppendLine($"{enumName}_{StyleName(field.Name)} {enumName} = {field.ConstantValue}");
             }
 
             builder.Dedent(IndentChars);
@@ -271,7 +272,7 @@ namespace Core.Generators.Go
             // All fields are optional in messages.
             bool fieldsOptional = definition.Kind == AggregateKind.Message;
 
-            string structName = definition.Name.ToPascalCase();
+            string structName = StyleName(definition.Name);
 
             WriteDocumentation(builder, definition.Documentation, null);
             builder.AppendLine($"type {structName} struct {{");
@@ -282,7 +283,7 @@ namespace Core.Generators.Go
                 WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
 
                 string typeName = TypeName(field.Type, fieldsOptional);
-                string fieldName = field.Name.ToPascalCase();
+                string fieldName = StyleName(field.Name);
 
                 builder.AppendLine($"{fieldName} {typeName}");
             }
@@ -305,12 +306,12 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteStructEncode(IndentedStringBuilder builder, IDefinition definition)
         {
-            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
+            builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
             builder.Indent(IndentChars);
 
             foreach (IField field in definition.Fields)
             {
-                builder.AppendLine(FieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(FieldEncodeString(field.Type, $"v.{StyleName(field.Name)}"));
             }
 
             builder.AppendLine("return out");
@@ -343,14 +344,14 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteStructDecode(IndentedStringBuilder builder, IDefinition definition)
         {
-            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
+            builder.AppendLine($"func (v *{StyleName(definition.Name)}) Decode(in []byte) ([]byte, error) {{");
             builder.Indent(IndentChars);
 
             builder.AppendLine("var err error");
 
             foreach (IField field in definition.Fields)
             {
-                builder.AppendLine(FieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(FieldDecodeString(field.Type, $"v.{StyleName(field.Name)}"));
                 builder.AppendLine("if err != nil {\n\treturn in, err\n}");
             }
 
@@ -387,7 +388,7 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteMessageEncode(IndentedStringBuilder builder, IDefinition definition)
         {
-            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Encode(out []byte) []byte {{");
+            builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
             builder.Indent(IndentChars);
 
             builder.AppendLine("lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)");
@@ -395,11 +396,11 @@ namespace Core.Generators.Go
 
             foreach (IField field in definition.Fields)
             {
-                builder.AppendLine($"if v.{field.Name.ToPascalCase()} != nil {{");
+                builder.AppendLine($"if v.{StyleName(field.Name)} != nil {{");
                 builder.Indent(IndentChars);
 
                 builder.AppendLine($"out = bebop.WriteByte(out, {field.ConstantValue})");
-                builder.AppendLine(OptionalFieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(OptionalFieldEncodeString(field.Type, $"v.{StyleName(field.Name)}"));
 
                 builder.Dedent(IndentChars);
                 builder.AppendLine("}");
@@ -461,7 +462,7 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
         {
-            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
+            builder.AppendLine($"func (v *{StyleName(definition.Name)}) Decode(in []byte) ([]byte, error) {{");
             builder.Indent(IndentChars);
 
             builder.AppendLine("var err error");
@@ -483,7 +484,7 @@ namespace Core.Generators.Go
                 builder.AppendLine($"case {field.ConstantValue}:");
                 builder.Indent(IndentChars);
 
-                builder.AppendLine(OptionalFieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(OptionalFieldDecodeString(field.Type, $"v.{StyleName(field.Name)}"));
                 builder.AppendLine("if err != nil {\n\treturn in, err\n}");
 
                 builder.Dedent(IndentChars);
@@ -752,8 +753,8 @@ namespace Core.Generators.Go
                 },
                 ArrayType at => $"[]{TypeName(at.MemberType)}",
                 MapType mt => $"map[{TypeName(mt.KeyType)}]{TypeName(mt.ValueType)}",
-                DefinedType dt when IsEnum(dt) => dt.Name.ToPascalCase(),
-                DefinedType dt => dt.Name.ToPascalCase(),
+                DefinedType dt when IsEnum(dt) => StyleName(dt.Name),
+                DefinedType dt => StyleName(dt.Name),
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
             };
         }
@@ -851,6 +852,41 @@ namespace Core.Generators.Go
                 DefinedType dt when !IsEnum(dt) => FieldDecodeString(type, fieldName),
                 _ => $"{fieldName} = new({TypeName(type)})\n" + FieldDecodeString(type, "*" + fieldName),
             };
+        }
+
+        // Styles an identifier using the same rules as fields in Go's protobuf.
+        // https://developers.google.com/protocol-buffers/docs/reference/go-generated#fields
+        private static string StyleName(string name, bool exportType = true)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            Rune[] runeArray = name.EnumerateRunes().ToArray();
+            for (int i = 0; i < runeArray.Length; i++)
+            {
+                if (i == 0 && exportType)
+                {
+                    if (runeArray[i] == new Rune('_'))
+                    {
+                        sb.Append('X');
+                    }
+                    else
+                    {
+                        sb.Append(Rune.ToUpperInvariant(runeArray[i]).ToString());
+                    }
+                    continue;
+                }
+
+                if (runeArray[i] == new Rune('_') && i + 1 < runeArray.Length && Rune.IsLower(runeArray[i + 1]))
+                {
+                    sb.Append(Rune.ToUpperInvariant(runeArray[i+1]).ToString());
+                    i++;
+                    continue;
+                }
+
+                sb.Append(runeArray[i].ToString());
+            }
+
+            return sb.ToString();
         }
     }
 }
