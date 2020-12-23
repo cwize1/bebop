@@ -9,6 +9,9 @@ namespace Core.Generators.Go
 {
     public class GoGenerator : Generator
     {
+        // Go strongly prefers the use of tabs over spaces.
+        private const char IndentChar = '\t'; 
+
         private record NamelessTypeInfo(TypeBase Type, string MangledName);
 
         private const int IndentSpeces = 1;
@@ -23,8 +26,7 @@ namespace Core.Generators.Go
         {
             FillNamelessTypes();
 
-            // Note: Go strongly prefers the use of tabs over spaces.
-            var builder = new IndentedStringBuilder(indentChar: '\t');
+            var builder = new IndentedStringBuilder(indentChar: IndentChar);
 
             if (string.IsNullOrWhiteSpace(Schema.Options.GoPkg))
             {
@@ -296,8 +298,47 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///   func (v *SomeClass) Decode(in []byte) ([]byte, error) {
+        ///     var err error
+        ///     v.FirstField, in, err = bebop.ReadBool(in)
+        ///     if err != nil {
+        //          return in, err
+        ///     }
+        ///     v.SecondField, in, err = bebop.WriteFloat32(in)
+        ///     if err != nil {
+        //          return in, err
+        ///     }
+        ///     in, err = v.ThirdField.Encode(out)
+        ///     if err != nil {
+        //          return in, err
+        ///     }
+        ///     return in, nil
+        ///   }
+        ///   
+        /// </summary>
         private void WriteStructDecode(IndentedStringBuilder builder, IDefinition definition)
         {
+            builder.AppendLine($"func (v *{definition.Name.ToPascalCase()}) Decode(in []byte) ([]byte, error) {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("var err error");
+
+            foreach (IField field in definition.Fields)
+            {
+                builder.AppendLine(FieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine("if err != nil {");
+                builder.AppendLine(IndentChar + "return in, err");
+                builder.AppendLine("}");
+            }
+
+            builder.AppendLine("return in, nil");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine();
         }
 
         /// <summary>
@@ -393,14 +434,56 @@ namespace Core.Generators.Go
             builder.AppendLine("}");
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func decode__Ss_string(out []byte) ([]string, []byte, error) {
+        ///         arrayLength, in, err := bebop.ReadArrayLength(in)
+        ///         if err != nil {
+        ///             return nil, in, err
+        ///         }
+        ///         v := make([]string, arrayLength)
+        ///         for i := 0; i < arrayLength; i++ {
+        ///             v[i], in, err = bebop.ReadString(in)
+        ///             if err != nil {
+        ///                 return nil, in, err
+        ///             }
+        ///         }
+        ///         return v, in, nil
+        ///     }
+        ///     
+        /// </summary>
         private void WriteArrayDecode(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
         {
+            builder.AppendLine($"func decode{mangledName}(in []byte) ({typename}, []byte, error) {{");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine("arrayLength, in, err := bebop.ReadArrayLength(in)");
+            builder.AppendLine("if err != nil {");
+            builder.AppendLine(IndentChar + "return nil, in, err");
+            builder.AppendLine("}");
+
+            builder.AppendLine($"v := make({typename}, arrayLength)");
+            builder.AppendLine("for i := 0; i < arrayLength; i++ {");
+            builder.Indent(IndentSpeces);
+
+            builder.AppendLine(FieldDecodeString(at.MemberType, $"v[i]"));
+            builder.AppendLine("if err != nil {");
+            builder.AppendLine(IndentChar + "return nil, in, err");
+            builder.AppendLine("}");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
+            builder.AppendLine("return v, in, nil");
+
+            builder.Dedent(IndentSpeces);
+            builder.AppendLine("}");
         }
 
         /// <summary>
         /// Example output:
         ///
-        ///   func encode__S_string_s_int32(out []byte, value map[string]int32) []byte {
+        ///   func encode_map_S_string_s_int32(out []byte, value map[string]int32) []byte {
         ///     out = bebop.WriteArrayLength(len(value))
         ///     for key, value := range value {
         ///       out = bebop.WriteString(out, key)
@@ -525,6 +608,35 @@ namespace Core.Generators.Go
                 MapType mt => $"out = encode{GetTypeMangledName(type)}(out, {fieldName})",
                 DefinedType dt when IsEnum(dt) => $"out = bebop.WriteUInt32(out, uint32({fieldName}))",
                 DefinedType dt => $"out = {fieldName}.Encode(out)",
+                _ => throw new InvalidOperationException($"GetTypeName: {type}")
+            };
+        }
+
+        private string FieldDecodeString(TypeBase type, string fieldName)
+        {
+            return type switch
+            {
+                ScalarType st => st.BaseType switch
+                {
+                    BaseType.Bool => $"{fieldName}, in, err = bebop.ReadBool(in)",
+                    BaseType.Byte => $"{fieldName}, in, err = bebop.ReadByte(in)",
+                    BaseType.UInt16 => $"{fieldName}, in, err = bebop.ReadUInt16(in)",
+                    BaseType.Int16 => $"{fieldName}, in, err = bebop.ReadInt16(in)",
+                    BaseType.UInt32 => $"{fieldName}, in, err = bebop.ReadUInt32(in)",
+                    BaseType.Int32 => $"{fieldName}, in, err = bebop.ReadInt32(in)",
+                    BaseType.UInt64 => $"{fieldName}, in, err = bebop.ReadUInt64(in)",
+                    BaseType.Int64 => $"{fieldName}, in, err = bebop.ReadInt64(in)",
+                    BaseType.Float32 => $"{fieldName}, in, err = bebop.ReadFloat32(in)",
+                    BaseType.Float64 => $"{fieldName}, in, err = bebop.ReadFloat64(in)",
+                    BaseType.String => $"{fieldName}, in, err = bebop.ReadString(in)",
+                    BaseType.Guid => $"{fieldName}, in, err = bebop.ReadGUID(in)",
+                    BaseType.Date => $"{fieldName}, in, err = bebop.ReadTimestamp(in)",
+                    _ => throw new ArgumentOutOfRangeException(st.BaseType.ToString())
+                },
+                ArrayType at => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
+                MapType mt => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
+                DefinedType dt when IsEnum(dt) => $"{{ var tmp uint32; tmp, in, err = bebop.ReadUInt32(in); {fieldName} = {dt.Name}(tmp); }}",
+                DefinedType dt => $"in, err = {fieldName}.Decode(in)",
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
             };
         }
