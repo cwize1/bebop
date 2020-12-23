@@ -249,6 +249,9 @@ namespace Core.Generators.Go
         /// </summary>
         private void WriteAggregateTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
         {
+            // All fields are optional in messages.
+            bool fieldsOptional = definition.Kind == AggregateKind.Message;
+
             string structName = definition.Name.ToPascalCase();
 
             WriteDocumentation(builder, definition.Documentation, null);
@@ -259,7 +262,7 @@ namespace Core.Generators.Go
             {
                 WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
 
-                string typeName = TypeName(field.Type);
+                string typeName = TypeName(field.Type, fieldsOptional);
                 string fieldName = field.Name.ToPascalCase();
 
                 builder.AppendLine($"{fieldName} {typeName}");
@@ -347,12 +350,18 @@ namespace Core.Generators.Go
         ///   func (v *SomeClass) Encode(out []byte) []byte {
         ///     lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)
         ///     out = lengthPlaceholder
-        ///     out = bebop.WriteByte(out, 1)
-        ///     out = bebop.WriteBool(out, v.FirstField)
-        ///     out = bebop.WriteByte(out, 2)
-        ///     out = bebop.WriteFloat32(out, v.SecondField)
-        ///     out = bebop.WriteByte(out, 3)
-        ///     out = v.ThirdField.Encode(out)
+        ///     if v.FirstField != nil {
+        ///         out = bebop.WriteByte(out, 1)
+        ///         out = bebop.WriteBool(out, v.FirstField)
+        ///     }
+        ///     if v.SecondField != nil {
+        ///         out = bebop.WriteByte(out, 2)
+        ///         out = bebop.WriteFloat32(out, v.SecondField)
+        ///     }
+        ///     if v.ThirdField != nil {
+        ///         out = bebop.WriteByte(out, 3)
+        ///         out = v.ThirdField.Encode(out)
+        ///     }
         ///     out = bebop.WriteByte(out, 0)
         ///     bebop.WriteMessageLength(out, lengthPlaceholder)
         ///     return out
@@ -369,8 +378,14 @@ namespace Core.Generators.Go
 
             foreach (IField field in definition.Fields)
             {
+                builder.AppendLine($"if v.{field.Name.ToPascalCase()} != nil {{");
+                builder.Indent(IndentSpeces);
+
                 builder.AppendLine($"out = bebop.WriteByte(out, {field.ConstantValue})");
-                builder.AppendLine(FieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(OptionalFieldEncodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+
+                builder.Dedent(IndentSpeces);
+                builder.AppendLine("}");
             }
 
             builder.AppendLine("out = bebop.WriteByte(out, 0)");
@@ -407,12 +422,12 @@ namespace Core.Generators.Go
         ///                     return in, err
         ///                 }
         ///             case 2:
-        ///                 v.SecondField, in, err = bebop.WriteFloat32(in)
+        ///                 v.SecondField, in, err = bebop.ReadFloat32(in)
         ///                 if err != nil {
         ///                     return in, err
         ///                 }
         ///             case 3:
-        ///                 in, err = v.ThirdField.Encode(out)
+        ///                 in, err = v.ThirdField.Decode(out)
         ///                 if err != nil {
         ///                     return in, err
         ///                 }
@@ -451,7 +466,7 @@ namespace Core.Generators.Go
                 builder.AppendLine($"case {field.ConstantValue}:");
                 builder.Indent(IndentSpeces);
 
-                builder.AppendLine(FieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
+                builder.AppendLine(OptionalFieldDecodeString(field.Type, $"v.{field.Name.ToPascalCase()}"));
                 builder.AppendLine("if err != nil {\n\treturn in, err\n}");
 
                 builder.Dedent(IndentSpeces);
@@ -702,6 +717,11 @@ namespace Core.Generators.Go
             }
         }
 
+        private string TypeName(TypeBase type, bool optional)
+        {
+            return optional ? TypeNameWithOptional(type) : TypeName(type);
+        }
+
         private string TypeName(TypeBase type)
         {
             return type switch
@@ -726,8 +746,18 @@ namespace Core.Generators.Go
                 ArrayType at => $"[]{TypeName(at.MemberType)}",
                 MapType mt => $"map[{TypeName(mt.KeyType)}]{TypeName(mt.ValueType)}",
                 DefinedType dt when IsEnum(dt) => dt.Name.ToPascalCase(),
-                DefinedType dt => $"*{dt.Name.ToPascalCase()}",
+                DefinedType dt => dt.Name.ToPascalCase(),
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
+            };
+        }
+
+        private string TypeNameWithOptional(TypeBase type)
+        {
+            return type switch
+            {
+                ArrayType at => TypeName(type),
+                MapType mt => TypeName(type),
+                _ => "*" + TypeName(type),
             };
         }
 
@@ -765,6 +795,17 @@ namespace Core.Generators.Go
             };
         }
 
+        private string OptionalFieldEncodeString(TypeBase type, string fieldName)
+        {
+            return type switch
+            {
+                ArrayType at => FieldEncodeString(type, fieldName),
+                MapType mt => FieldEncodeString(type, fieldName),
+                DefinedType dt when !IsEnum(dt) => FieldEncodeString(type, fieldName),
+                _ => FieldEncodeString(type, "*" + fieldName),
+            };
+        }
+
         private string FieldDecodeString(TypeBase type, string fieldName)
         {
             return type switch
@@ -789,8 +830,19 @@ namespace Core.Generators.Go
                 ArrayType at => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
                 MapType mt => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
                 DefinedType dt when IsEnum(dt) => $"{{\n\tvar tmp uint32\n\ttmp, in, err = bebop.ReadUInt32(in)\n\t{fieldName} = {dt.Name}(tmp)\n}}",
-                DefinedType dt => $"{fieldName} = &{dt.Name}{{}}\nin, err = {fieldName}.Decode(in)",
+                DefinedType dt => $"in, err = {fieldName}.Decode(in)",
                 _ => throw new InvalidOperationException($"GetTypeName: {type}")
+            };
+        }
+
+        private string OptionalFieldDecodeString(TypeBase type, string fieldName)
+        {
+            return type switch
+            {
+                ArrayType at => FieldDecodeString(type, fieldName),
+                MapType mt => FieldDecodeString(type, fieldName),
+                DefinedType dt when !IsEnum(dt) => FieldDecodeString(type, fieldName),
+                _ => $"{fieldName} = new({TypeName(type)})\n" + FieldDecodeString(type, "*" + fieldName),
             };
         }
     }
