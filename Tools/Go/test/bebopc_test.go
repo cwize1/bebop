@@ -12,5 +12,12 @@ import (
 
 func TestBebopc(t *testing.T) {
 	_ = other.Musician{}
-	_ = arrofstr.ArrayOfStrings{}
+
+	a := arrofstr.ArrayOfStrings{Strings: []string{"a", "bb", "ccc"}}
+
+	aEncoded := a.Encode(nil)
+	aDecoded := arrofstr.ArrayOfStrings{}
+	aEncodedEnd, err := aDecoded.Decode(aEncoded)
+
+	_, _ = aEncodedEnd, err
 }

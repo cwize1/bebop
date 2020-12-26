@@ -248,11 +248,16 @@ namespace Core.Generators.Go
             case AggregateKind.Struct:
                 WriteStructEncode(builder, definition);
                 WriteStructDecode(builder, definition);
+                WriteAggregateTypeEqual(builder, definition);
                 break;
 
             case AggregateKind.Message:
                 WriteMessageEncode(builder, definition);
                 WriteMessageDecode(builder, definition);
+                WriteAggregateTypeEqual(builder, definition);
+                break;
+
+            default:
                 break;
             }
         }
@@ -508,6 +513,43 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func (v1 *SomeClass) Equal(v2 *SomeClass) bool {
+        ///         return v1 == v2 || (v1 != nil &amp;&amp; v2 != nil &amp;&amp;
+        ///             v1.FirstField == v2.FirstField &amp;&amp;
+        ///             v1.SecondField == v2.SecondField &amp;&amp;
+        ///             v1.ThirdField.Equal(&amp;v1.ThirdField))
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteAggregateTypeEqual(IndentedStringBuilder builder, IDefinition definition)
+        {
+            // All fields are optional in messages.
+            bool fieldsOptional = definition.Kind == AggregateKind.Message;
+
+            builder.AppendLine($"func (v1 *{StyleName(definition.Name)}) Equal(v2 *{StyleName(definition.Name)}) bool {{");
+            builder.Indent(IndentChars);
+
+            StringBuilder sb = new StringBuilder();
+            sb.Append("return v1 == v2 || (v1 != nil && v2 != nil");
+
+            foreach (IField field in definition.Fields)
+            {
+                sb.Append(" &&\n\t");
+                sb.Append(FieldEqualString(field.Type, $"v1.{StyleName(field.Name)}", $"v2.{StyleName(field.Name)}", fieldsOptional));
+            }
+
+            sb.Append(")");
+
+            builder.AppendLine(sb.ToString());
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
         private void WriteNamelessTypesFunctions(IndentedStringBuilder builder)
         {
             foreach (var kvp in _NamelessTypes)
@@ -517,11 +559,13 @@ namespace Core.Generators.Go
                 case ArrayType at:
                     WriteArrayEncode(builder, kvp.Key, at, kvp.Value.MangledName);
                     WriteArrayDecode(builder, kvp.Key, at, kvp.Value.MangledName);
+                    WriteArrayEqual(builder, kvp.Key, at, kvp.Value.MangledName);
                     break;
 
                 case MapType mt:
                     WriteMapEncode(builder, kvp.Key, mt, kvp.Value.MangledName);
                     WriteMapDecode(builder, kvp.Key, mt, kvp.Value.MangledName);
+                    WriteMapEqual(builder, kvp.Key, mt, kvp.Value.MangledName);
                     break;
                 }
             }
@@ -596,6 +640,49 @@ namespace Core.Generators.Go
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return v, in, nil");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func equal__Ss_string(v1 []string, v2 string[]) bool {
+        ///         v1Len := len(v1)
+        ///         if v1Len != len(v2) {
+        ///             return false
+        ///         }
+        ///         for i := 0; i < v1Len; i++ {
+        ///             if !(v1[i] == v2[i]) {
+        ///                 return false
+        ///             }
+        ///         }
+        ///         return true
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteArrayEqual(IndentedStringBuilder builder, string typename, ArrayType at, string mangledName)
+        {
+            builder.AppendLine($"func equal{mangledName}(v1 {typename}, v2 {typename}) bool {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("v1Len := len(v1)");
+            builder.AppendLine("if v1Len != len(v2) {");
+            builder.AppendLine("\treturn false");
+            builder.AppendLine("}");
+
+            builder.AppendLine("for i := 0; i < v1Len; i++ {");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("if !(" + FieldEqualString(at.MemberType, "v1[i]", "v2[i]") + ") {");
+            builder.AppendLine("\treturn false");
+            builder.AppendLine("}");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine("return true");
 
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
@@ -687,6 +774,49 @@ namespace Core.Generators.Go
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
             builder.AppendLine("return v, in, nil");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func equal__Ss_string(v1 map[string]int32, v2 map[string]int32) bool {
+        ///         v1Len := len(v1)
+        ///         if v1Len != len(v2) {
+        ///             return false
+        ///         }
+        ///         for key, value := range v1 {
+        ///             if !(value == v2[key]) {
+        ///                 return false
+        ///             }
+        ///         }
+        ///         return true
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteMapEqual(IndentedStringBuilder builder, string typename, MapType at, string mangledName)
+        {
+            builder.AppendLine($"func equal{mangledName}(v1 {typename}, v2 {typename}) bool {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("v1Len := len(v1)");
+            builder.AppendLine("if v1Len != len(v2) {");
+            builder.AppendLine("\treturn false");
+            builder.AppendLine("}");
+
+            builder.AppendLine("for key, value := range v1 {");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("if !(" + FieldEqualString(at.ValueType, "value", "v2[key]") + ") {");
+            builder.AppendLine("\treturn false");
+            builder.AppendLine("}");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine("return true");
 
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
@@ -799,7 +929,7 @@ namespace Core.Generators.Go
                 MapType mt => $"out = encode{GetTypeMangledName(type)}(out, {fieldName})",
                 DefinedType dt when IsEnum(dt) => $"out = bebop.WriteUInt32(out, uint32({fieldName}))",
                 DefinedType dt => $"out = {fieldName}.Encode(out)",
-                _ => throw new InvalidOperationException($"GetTypeName: {type}")
+                _ => throw new InvalidOperationException($"FieldEncodeString: {type}")
             };
         }
 
@@ -839,7 +969,7 @@ namespace Core.Generators.Go
                 MapType mt => $"{fieldName}, in, err = decode{GetTypeMangledName(type)}(in)",
                 DefinedType dt when IsEnum(dt) => $"{{\n\tvar tmp uint32\n\ttmp, in, err = bebop.ReadUInt32(in)\n\t{fieldName} = {dt.Name}(tmp)\n}}",
                 DefinedType dt => $"in, err = {fieldName}.Decode(in)",
-                _ => throw new InvalidOperationException($"GetTypeName: {type}")
+                _ => throw new InvalidOperationException($"FieldDecodeString: {type}")
             };
         }
 
@@ -851,6 +981,39 @@ namespace Core.Generators.Go
                 MapType mt => FieldDecodeString(type, fieldName),
                 DefinedType dt when !IsEnum(dt) => FieldDecodeString(type, fieldName),
                 _ => $"{fieldName} = new({TypeName(type)})\n" + FieldDecodeString(type, "*" + fieldName),
+            };
+        }
+
+        private string FieldEqualString(TypeBase type, string fieldName1, string fieldName2, bool optional)
+        {
+            return optional ?
+                OptionalFieldEqualString(type, fieldName1, fieldName2) :
+                FieldEqualString(type, fieldName1, fieldName2);
+        }
+
+        private string FieldEqualString(TypeBase type, string fieldName1, string fieldName2)
+        {
+            return type switch
+            {
+                ScalarType st => $"{fieldName1} == {fieldName2}",
+                ArrayType at => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
+                MapType mt => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
+                DefinedType dt when IsEnum(dt) => $"{fieldName1} == {fieldName2}",
+                DefinedType dt => $"{fieldName1}.Equal(&{fieldName2})",
+                _ => throw new InvalidOperationException($"FieldEqualString: {type}")
+            };
+        }
+
+        private string OptionalFieldEqualString(TypeBase type, string fieldName1, string fieldName2)
+        {
+            return type switch
+            {
+                ScalarType st => $"(({fieldName1} == {fieldName2}) || ({fieldName1} != nil && {fieldName2} != nil && *{fieldName1} == *{fieldName2}))",
+                ArrayType at => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
+                MapType mt => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
+                DefinedType dt when IsEnum(dt) => $"(({fieldName1} == {fieldName2}) || ({fieldName1} != nil && {fieldName2} != nil && *{fieldName1} == *{fieldName2}))",
+                DefinedType dt => $"{fieldName1}.Equal({fieldName2})",
+                _ => throw new InvalidOperationException($"OptionalFieldEqualString: {type}")
             };
         }
 
