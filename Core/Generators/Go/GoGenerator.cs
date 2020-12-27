@@ -461,6 +461,7 @@ namespace Core.Generators.Go
         ///         if len(bodyStart) - len(in) > messageLength {
         ///             return in, bebop.ErrMessageBodyOverrun
         ///         }
+        ///         in = bodyStart[messageLength:]
         ///         return in, nil
         ///     }
         ///     
@@ -506,6 +507,7 @@ namespace Core.Generators.Go
             builder.AppendLine("\treturn in, bebop.ErrMessageBodyOverrun");
             builder.AppendLine("}");
 
+            builder.AppendLine("in = bodyStart[messageLength:]");
             builder.AppendLine("return in, nil");
 
             builder.Dedent(IndentChars);
@@ -979,7 +981,7 @@ namespace Core.Generators.Go
             {
                 ArrayType at => FieldDecodeString(type, fieldName),
                 MapType mt => FieldDecodeString(type, fieldName),
-                DefinedType dt when !IsEnum(dt) => FieldDecodeString(type, fieldName),
+                DefinedType dt when !IsEnum(dt) => $"{fieldName} = new({TypeName(type)})\n" + FieldDecodeString(type, fieldName),
                 _ => $"{fieldName} = new({TypeName(type)})\n" + FieldDecodeString(type, "*" + fieldName),
             };
         }

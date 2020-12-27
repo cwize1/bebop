@@ -18,7 +18,7 @@ type BebopStruct interface {
 	Decode(in []byte) ([]byte, error)
 }
 
-func TestBebopc(t *testing.T) {
+func TestEncodeDecodeEqual(t *testing.T) {
 	testEncodeDecodeEqual(t, &arrofstr.ArrayOfStrings{Strings: []string{"", "a", "bb", "ccc"}})
 	testEncodeDecodeEqual(t, &other.BasicArrays{
 		ABool:    []bool{false, true},
@@ -125,5 +125,70 @@ func testEncodeDecodeEqual(t *testing.T, value interface{}) {
 	if !invokeMethodByName("Equal", deref(value), deref(decoded))[0].(bool) {
 		t.Errorf("Decoded value is not the same as the original: %v", value)
 		return
+	}
+}
+
+func TestVersionCompatability(t *testing.T) {
+	valueNewVersion := other.SkipTestNewContainer{
+		S: &other.SkipTestNew{
+			X: (func() *int32 {
+				tmp := int32(1)
+				return &tmp
+			})(),
+			Y: (func() *int32 {
+				tmp := int32(2)
+				return &tmp
+			})(),
+			Z: (func() *int32 {
+				tmp := int32(3)
+				return &tmp
+			})(),
+		},
+		After: (func() *int32 {
+			tmp := int32(42)
+			return &tmp
+		})(),
+	}
+
+	valueOldVersion := other.SkipTestOldContainer{
+		S: &other.SkipTestOld{
+			X: (func() *int32 {
+				tmp := int32(1)
+				return &tmp
+			})(),
+			Y: (func() *int32 {
+				tmp := int32(2)
+				return &tmp
+			})(),
+		},
+		After: (func() *int32 {
+			tmp := int32(42)
+			return &tmp
+		})(),
+	}
+
+	encodedNewVersion := valueNewVersion.Encode(nil)
+
+	decodedOldVersion := other.SkipTestOldContainer{}
+	_, err := decodedOldVersion.Decode(encodedNewVersion)
+	if err != nil {
+		t.Errorf("Old version decode failed: %v", err)
+	}
+
+	if !valueOldVersion.Equal(decodedOldVersion) {
+		t.Errorf("Decoded old version didn't match expected")
+	}
+
+	encodedOldVersion := decodedOldVersion.Encode(nil)
+
+	decodedNewVersion := other.SkipTestNewContainer{}
+	_, err = decodedNewVersion.Decode(encodedOldVersion)
+	if err != nil {
+		t.Errorf("New version decode failed: %v", err)
+	}
+
+	valueNewVersion.S.Z = nil
+	if !valueNewVersion.Equal(decodedNewVersion) {
+		t.Errorf("Decoded new version didn't match expected")
 	}
 }
