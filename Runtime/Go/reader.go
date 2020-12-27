@@ -44,7 +44,7 @@ func ReadByte(in []byte) (byte, []byte, error) {
 
 // ReadUInt16 reads a uint16 value.
 func ReadUInt16(in []byte) (uint16, []byte, error) {
-	const length = 4
+	const length = 2
 
 	if len(in) < length {
 		return 0, in, ErrUnexpectedEOF
