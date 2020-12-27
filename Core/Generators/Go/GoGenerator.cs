@@ -516,11 +516,10 @@ namespace Core.Generators.Go
         /// <summary>
         /// Example output:
         ///
-        ///     func (v1 *SomeClass) Equal(v2 *SomeClass) bool {
-        ///         return v1 == v2 || (v1 != nil &amp;&amp; v2 != nil &amp;&amp;
-        ///             v1.FirstField == v2.FirstField &amp;&amp;
+        ///     func (v1 SomeClass) Equal(v2 SomeClass) bool {
+        ///         return v1.FirstField == v2.FirstField &amp;&amp;
         ///             v1.SecondField == v2.SecondField &amp;&amp;
-        ///             v1.ThirdField.Equal(&amp;v1.ThirdField))
+        ///             v1.ThirdField.Equal(v1.ThirdField)
         ///     }
         ///     
         /// </summary>
@@ -529,19 +528,20 @@ namespace Core.Generators.Go
             // All fields are optional in messages.
             bool fieldsOptional = definition.Kind == AggregateKind.Message;
 
-            builder.AppendLine($"func (v1 *{StyleName(definition.Name)}) Equal(v2 *{StyleName(definition.Name)}) bool {{");
+            builder.AppendLine($"func (v1 {StyleName(definition.Name)}) Equal(v2 {StyleName(definition.Name)}) bool {{");
             builder.Indent(IndentChars);
 
             StringBuilder sb = new StringBuilder();
-            sb.Append("return v1 == v2 || (v1 != nil && v2 != nil");
+            sb.Append("return ");
+
+            IField field0 = definition.Fields.First();
+            sb.Append(FieldEqualString(field0.Type, $"v1.{StyleName(field0.Name)}", $"v2.{StyleName(field0.Name)}", fieldsOptional));
 
             foreach (IField field in definition.Fields)
             {
                 sb.Append(" &&\n\t");
                 sb.Append(FieldEqualString(field.Type, $"v1.{StyleName(field.Name)}", $"v2.{StyleName(field.Name)}", fieldsOptional));
             }
-
-            sb.Append(")");
 
             builder.AppendLine(sb.ToString());
 
@@ -999,7 +999,7 @@ namespace Core.Generators.Go
                 ArrayType at => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
                 MapType mt => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
                 DefinedType dt when IsEnum(dt) => $"{fieldName1} == {fieldName2}",
-                DefinedType dt => $"{fieldName1}.Equal(&{fieldName2})",
+                DefinedType dt => $"{fieldName1}.Equal({fieldName2})",
                 _ => throw new InvalidOperationException($"FieldEqualString: {type}")
             };
         }
@@ -1012,7 +1012,7 @@ namespace Core.Generators.Go
                 ArrayType at => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
                 MapType mt => $"equal{GetTypeMangledName(type)}({fieldName1}, {fieldName2})",
                 DefinedType dt when IsEnum(dt) => $"(({fieldName1} == {fieldName2}) || ({fieldName1} != nil && {fieldName2} != nil && *{fieldName1} == *{fieldName2}))",
-                DefinedType dt => $"{fieldName1}.Equal({fieldName2})",
+                DefinedType dt => $"(({fieldName1} == {fieldName2}) || ({fieldName1} != nil && {fieldName2} != nil && {fieldName1}.Equal(*{fieldName2})))",
                 _ => throw new InvalidOperationException($"OptionalFieldEqualString: {type}")
             };
         }
