@@ -45,7 +45,7 @@ namespace Core.Generators.Go
             builder.AppendLine("import (");
             builder.Indent(IndentChars);
 
-            builder.AppendLine("bebop \"github.com/RainwayApp/bebop/Runtime/Go\"");
+            builder.AppendLine("\"github.com/RainwayApp/bebop/Runtime/Go/bebop\"");
 
             if (_GuidTypeUsed)
             {

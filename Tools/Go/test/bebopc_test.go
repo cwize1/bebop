@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	bebop "github.com/RainwayApp/bebop/Runtime/Go"
+	"github.com/RainwayApp/bebop/Runtime/Go/bebop"
 	"github.com/RainwayApp/bebop/Tools/Go/test/generated/arrofstr"
 	"github.com/RainwayApp/bebop/Tools/Go/test/generated/other"
 	"github.com/google/uuid"
