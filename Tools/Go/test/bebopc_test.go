@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	bebop "github.com/RainwayApp/bebop/Runtime/Go"
 	"github.com/RainwayApp/bebop/Tools/Go/test/generated/arrofstr"
 	"github.com/RainwayApp/bebop/Tools/Go/test/generated/other"
 	"github.com/google/uuid"
@@ -32,6 +33,58 @@ func TestBebopc(t *testing.T) {
 		AFloat64: []float64{16.16, -17.17},
 		AString:  []string{"18", "19"},
 		AGuid:    []uuid.UUID{uuid.New(), uuid.New()},
+	})
+	testEncodeDecodeEqual(t, &other.BasicTypes{
+		ABool:    true,
+		AByte:    1,
+		AInt16:   -2,
+		AUint16:  3,
+		AInt32:   -4,
+		AUint32:  5,
+		AInt64:   -6,
+		AUint64:  7,
+		AFloat32: -8.8,
+		AFloat64: 9.9,
+		AString:  "10",
+		AGuid:    uuid.New(),
+		ADate:    bebop.Timestamp(10),
+	})
+	testEncodeDecodeEqual(t, &other.Library{
+		Songs: map[uuid.UUID]other.Song{
+			uuid.New(): other.Song{},
+			uuid.New(): other.Song{
+				Title: (func() *string {
+					tmp := "string"
+					return &tmp
+				})(),
+				Year: (func() *uint16 {
+					tmp := uint16(1990)
+					return &tmp
+				})(),
+				Performers: []other.Musician{
+					{
+						Name:  "Player 1",
+						Plays: other.Instrument_Clarinet,
+					},
+					{
+						Name:  "Player 2",
+						Plays: other.Instrument_Sax,
+					},
+				},
+			},
+			uuid.New(): other.Song{
+				Performers: []other.Musician{
+					{
+						Name:  "Player 3",
+						Plays: other.Instrument_Trumpet,
+					},
+					{
+						Name:  "Player 4",
+						Plays: other.Instrument_Clarinet,
+					},
+				},
+			},
+		},
 	})
 }
 

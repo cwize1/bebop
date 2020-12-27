@@ -371,8 +371,8 @@ namespace Core.Generators.Go
         /// Example output:
         ///
         ///   func (v *SomeClass) Encode(out []byte) []byte {
-        ///     lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)
-        ///     out = lengthPlaceholder
+        ///     var lengthPlaceholder int
+        ///     lengthPlaceholder, out = bebop.WriteMessageLengthPlaceholder(out)
         ///     if v.FirstField != nil {
         ///         out = bebop.WriteByte(out, 1)
         ///         out = bebop.WriteBool(out, v.FirstField)
@@ -396,8 +396,8 @@ namespace Core.Generators.Go
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
             builder.Indent(IndentChars);
 
-            builder.AppendLine("lengthPlaceholder := bebop.WriteMessageLengthPlaceholder(out)");
-            builder.AppendLine("out = lengthPlaceholder");
+            builder.AppendLine("var lengthPlaceholder int");
+            builder.AppendLine("lengthPlaceholder, out = bebop.WriteMessageLengthPlaceholder(out)");
 
             foreach (IField field in definition.Fields)
             {

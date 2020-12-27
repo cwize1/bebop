@@ -93,13 +93,15 @@ func WriteArrayLength(out []byte, length int) []byte {
 	return WriteUInt32(out, uint32(length))
 }
 
-// WriteMessageLengthPlaceholder writes a placeholder for the message length.
-func WriteMessageLengthPlaceholder(out []byte) []byte {
-	return WriteUInt32(out, 0)
+// WriteMessageLengthPlaceholder writes the placeholder for the message length.
+func WriteMessageLengthPlaceholder(out []byte) (int, []byte) {
+	placeholderIndex := len(out)
+	return placeholderIndex, WriteUInt32(out, 0)
 }
 
-// WriteMessageLength fills in the message length placeholder.
-func WriteMessageLength(out []byte, placeholder []byte) {
-	messageLength := len(out) - len(placeholder)
-	binary.LittleEndian.PutUint32(placeholder, uint32(messageLength))
+// WriteMessageLength fills in the message length.
+func WriteMessageLength(out []byte, placeholderIndex int) {
+	const length int = 4
+	messageLength := len(out) - placeholderIndex - length
+	binary.LittleEndian.PutUint32(out[placeholderIndex:], uint32(messageLength))
 }
