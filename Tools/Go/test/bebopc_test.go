@@ -1,3 +1,5 @@
+// Note: array_of_strings.bop is separated from the other files to test the case where the GUID type isn't used.
+//
 //go:generate dotnet run --project ../../../Compiler/ --config bebopConfig.json
 //go:generate dotnet run --project ../../../Compiler/ --files "../../../Laboratory/Schemas/array_of_strings.bop" --go generated/arrofstr/arrofstr.go --gopkg arrofstr
 
@@ -84,6 +86,57 @@ func TestEncodeDecodeEqual(t *testing.T) {
 					},
 				},
 			},
+		},
+	})
+	testEncodeDecodeEqual(t, &other.SomeMaps{
+		M1: map[bool]bool{
+			false: true,
+			true:  false,
+		},
+		M2: map[string]map[string]string{
+			"1": map[string]string{
+				"a": "b",
+				"c": "d",
+			},
+			"2": map[string]string{
+				"e": "f",
+				"g": "h",
+			},
+		},
+		M3: []map[int32][]map[bool]other.S{
+			map[int32][]map[bool]other.S{
+				100: []map[bool]other.S{
+					map[bool]other.S{
+						false: {
+							X: 2,
+							Y: 3,
+						},
+						true: {
+							X: 4,
+							Y: 5,
+						},
+					},
+					map[bool]other.S{
+						true: {
+							X: 8,
+							Y: 9,
+						},
+					},
+				},
+				101: []map[bool]other.S{},
+			},
+			map[int32][]map[bool]other.S{},
+		},
+		M4: []map[string][]float32{
+			map[string][]float32{
+				"Q": {
+					100.1,
+					100.2,
+				},
+			},
+		},
+		M5: map[uuid.UUID]other.M{
+			uuid.New(): {},
 		},
 	})
 }
