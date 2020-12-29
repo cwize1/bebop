@@ -13,73 +13,87 @@ const (
 	readArrayLength = 100
 )
 
-func BenchmarkReadUInt64_1(b *testing.B) {
-	var out []byte
-	for j := 0; j < readArrayLength; j++ {
-		out = writeUInt64_1(out, rand.Uint64())
-	}
+func BenchmarkReadUInt64_V2_1(b *testing.B) {
+	out := makeBuffer()
+	ins := make([][]byte, 0, b.N/readArrayLength+1)
+	var values [readArrayLength]uint64
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
 		in := out
+		blockLength := min(i+readArrayLength, b.N)
 
-		for j := 0; j < readArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			var err error
 			var v uint64
 			v, in, err = readUInt64_1(in)
 			if err != nil {
 				b.Fatal("Read failed: ", err)
 			}
-			_ = v
+			values[i%readArrayLength] = v
 		}
+
+		ins = append(ins, in)
 	}
 }
 
-func BenchmarkReadUInt64_2(b *testing.B) {
-	var out []byte
-	for j := 0; j < readArrayLength; j++ {
-		out = writeUInt64_1(out, rand.Uint64())
-	}
+func BenchmarkReadUInt64_V2_2(b *testing.B) {
+	out := makeBuffer()
+	ins := make([][]byte, 0, b.N/readArrayLength+1)
+	var values [readArrayLength]uint64
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
 		in := out
+		blockLength := min(i+readArrayLength, b.N)
 
-		for j := 0; j < readArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			var err error
 			var v uint64
 			v, in, err = readUInt64_2(in)
 			if err != nil {
 				b.Fatal("Read failed: ", err)
 			}
-			_ = v
+			values[i%readArrayLength] = v
 		}
+
+		ins = append(ins, in)
 	}
 }
 
-func BenchmarkReadUInt64_3(b *testing.B) {
-	var out []byte
-	for j := 0; j < readArrayLength; j++ {
-		out = writeUInt64_1(out, rand.Uint64())
-	}
+func BenchmarkReadUInt64_V2_3(b *testing.B) {
+	out := makeBuffer()
+	ins := make([][]byte, 0, b.N/readArrayLength+1)
+	var values [readArrayLength]uint64
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
 		in := out
+		blockLength := min(i+readArrayLength, b.N)
 
-		for j := 0; j < readArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			var err error
 			var v uint64
 			v, in, err = readUInt64_3(in)
 			if err != nil {
 				b.Fatal("Read failed: ", err)
 			}
-			_ = v
+			values[i%readArrayLength] = v
 		}
+
+		ins = append(ins, in)
 	}
+}
+
+func makeBuffer() []byte {
+	var out []byte
+	for j := 0; j < readArrayLength; j++ {
+		out = writeUInt64_1(out, rand.Uint64())
+	}
+	return out
 }
 
 func readUInt64_1(in []byte) (uint64, []byte, error) {

@@ -11,48 +11,58 @@ const (
 	writeArrayLength = 100
 )
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func BenchmarkWriteUInt64_1(b *testing.B) {
 	value := rand.Uint64()
-
-	outs := make([][]byte, b.N)
+	outs := make([][]byte, 0, b.N/writeArrayLength+1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
+		blockLength := min(i+writeArrayLength, b.N)
+
 		var out []byte
-		for j := 0; j < writeArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			out = writeUInt64_1(out, value)
 		}
-		outs[i] = out
+		outs = append(outs, out)
 	}
 }
 
 func BenchmarkWriteUInt64_2(b *testing.B) {
 	value := rand.Uint64()
-
-	outs := make([][]byte, b.N)
+	outs := make([][]byte, 0, b.N/writeArrayLength+1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
+		blockLength := min(i+writeArrayLength, b.N)
+
 		var out []byte
-		for j := 0; j < writeArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			out = writeUInt64_2(out, value)
 		}
-		outs[i] = out
+		outs = append(outs, out)
 	}
 }
 
 func BenchmarkWriteUInt64_3(b *testing.B) {
 	value := rand.Uint64()
-
-	outs := make([][]byte, b.N)
+	outs := make([][]byte, 0, b.N/writeArrayLength+1)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < b.N; {
+		blockLength := min(i+writeArrayLength, b.N)
+
 		var out []byte
-		for j := 0; j < writeArrayLength; j++ {
+		for ; i < blockLength; i++ {
 			out = writeUInt64_3(out, value)
 		}
-		outs[i] = out
+		outs = append(outs, out)
 	}
 }
 
@@ -64,6 +74,9 @@ func BenchmarkWriteUInt64_V2_1(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out = writeUInt64_1(out, value)
 	}
+	b.StopTimer()
+
+	_ = out[rand.Intn(b.N)]
 }
 
 func BenchmarkWriteUInt64_V2_2(b *testing.B) {
@@ -74,6 +87,9 @@ func BenchmarkWriteUInt64_V2_2(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out = writeUInt64_2(out, value)
 	}
+	b.StopTimer()
+
+	_ = out[rand.Intn(b.N)]
 }
 
 func BenchmarkWriteUInt64_V2_3(b *testing.B) {
@@ -84,6 +100,9 @@ func BenchmarkWriteUInt64_V2_3(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		out = writeUInt64_3(out, value)
 	}
+	b.StopTimer()
+
+	_ = out[rand.Intn(b.N)]
 }
 
 func writeUInt64_1(out []byte, value uint64) []byte {
