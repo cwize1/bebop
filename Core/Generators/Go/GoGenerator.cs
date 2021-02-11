@@ -543,7 +543,7 @@ namespace Core.Generators.Go
             IField field0 = definition.Fields.First();
             sb.Append(FieldEqualString(field0.Type, $"v1.{StyleName(field0.Name)}", $"v2.{StyleName(field0.Name)}", fieldsOptional));
 
-            foreach (IField field in definition.Fields)
+            foreach (IField field in definition.Fields.Skip(1))
             {
                 sb.Append(" &&\n\t");
                 sb.Append(FieldEqualString(field.Type, $"v1.{StyleName(field.Name)}", $"v2.{StyleName(field.Name)}", fieldsOptional));
