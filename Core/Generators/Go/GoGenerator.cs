@@ -81,9 +81,14 @@ namespace Core.Generators.Go
         {
             foreach (var definition in Schema.Definitions.Values)
             {
-                foreach (IField field in definition.Fields)
+                switch (definition)
                 {
-                    PreprocessTypes(field.Type);
+                case FieldsDefinition fieldsDefinition:
+                    foreach (IField field in fieldsDefinition.Fields)
+                    {
+                        PreprocessTypes(field.Type);
+                    }
+                    break;
                 }
             }
         }
@@ -190,17 +195,16 @@ namespace Core.Generators.Go
             return sb.ToString();
         }
 
-        private void WriteTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteTypeDefinition(IndentedStringBuilder builder, Definition definition)
         {
-            switch (definition.Kind)
+            switch (definition)
             {
-            case AggregateKind.Enum:
-                WriteEnumDefinition(builder, definition);
+            case EnumDefinition enumDefinition:
+                WriteEnumDefinition(builder, enumDefinition);
                 break;
 
-            case AggregateKind.Message:
-            case AggregateKind.Struct:
-                WriteAggregateTypeDefinition(builder, definition);
+            case FieldsDefinition fieldsDefinition:
+                WriteAggregateTypeDefinition(builder, fieldsDefinition);
                 break;
             }
         }
@@ -220,7 +224,7 @@ namespace Core.Generators.Go
         ///   )
         ///   
         /// </summary>
-        private void WriteEnumDefinition(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteEnumDefinition(IndentedStringBuilder builder, EnumDefinition definition)
         {
             string enumName = StyleName(definition.Name);
 
@@ -230,7 +234,7 @@ namespace Core.Generators.Go
             builder.AppendLine("const (");
             builder.Indent(IndentChars);
 
-            foreach (IField field in definition.Fields)
+            foreach (IField field in definition.Members)
             {
                 WriteDocumentation(builder, field.Documentation, field.DeprecatedAttribute?.Value);
                 builder.AppendLine($"{enumName}_{StyleName(field.Name)} {enumName} = {field.ConstantValue}");
@@ -241,20 +245,20 @@ namespace Core.Generators.Go
             builder.AppendLine();
         }
 
-        private void WriteAggregateTypeFunctions(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteAggregateTypeFunctions(IndentedStringBuilder builder, Definition definition)
         {
-            switch (definition.Kind)
+            switch (definition)
             {
-            case AggregateKind.Struct:
-                WriteStructEncode(builder, definition);
-                WriteStructDecode(builder, definition);
-                WriteAggregateTypeEqual(builder, definition);
+            case StructDefinition structDefinition:
+                WriteStructEncode(builder, structDefinition);
+                WriteStructDecode(builder, structDefinition);
+                WriteAggregateTypeEqual(builder, structDefinition);
                 break;
 
-            case AggregateKind.Message:
-                WriteMessageEncode(builder, definition);
-                WriteMessageDecode(builder, definition);
-                WriteAggregateTypeEqual(builder, definition);
+            case MessageDefinition messageDefinition:
+                WriteMessageEncode(builder, messageDefinition);
+                WriteMessageDecode(builder, messageDefinition);
+                WriteAggregateTypeEqual(builder, messageDefinition);
                 break;
 
             default:
@@ -272,10 +276,10 @@ namespace Core.Generators.Go
         ///   }
         ///   
         /// </summary>
-        private void WriteAggregateTypeDefinition(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteAggregateTypeDefinition(IndentedStringBuilder builder, FieldsDefinition definition)
         {
             // All fields are optional in messages.
-            bool fieldsOptional = definition.Kind == AggregateKind.Message;
+            bool fieldsOptional = definition is MessageDefinition;
 
             string structName = StyleName(definition.Name);
 
@@ -309,7 +313,7 @@ namespace Core.Generators.Go
         ///   }
         ///   
         /// </summary>
-        private void WriteStructEncode(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteStructEncode(IndentedStringBuilder builder, StructDefinition definition)
         {
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
             builder.Indent(IndentChars);
@@ -347,7 +351,7 @@ namespace Core.Generators.Go
         ///   }
         ///   
         /// </summary>
-        private void WriteStructDecode(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteStructDecode(IndentedStringBuilder builder, StructDefinition definition)
         {
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Decode(in []byte) ([]byte, error) {{");
             builder.Indent(IndentChars);
@@ -391,7 +395,7 @@ namespace Core.Generators.Go
         ///   }
         ///   
         /// </summary>
-        private void WriteMessageEncode(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteMessageEncode(IndentedStringBuilder builder, MessageDefinition definition)
         {
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
             builder.Indent(IndentChars);
@@ -466,7 +470,7 @@ namespace Core.Generators.Go
         ///     }
         ///     
         /// </summary>
-        private void WriteMessageDecode(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteMessageDecode(IndentedStringBuilder builder, MessageDefinition definition)
         {
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Decode(in []byte) ([]byte, error) {{");
             builder.Indent(IndentChars);
@@ -525,10 +529,10 @@ namespace Core.Generators.Go
         ///     }
         ///     
         /// </summary>
-        private void WriteAggregateTypeEqual(IndentedStringBuilder builder, IDefinition definition)
+        private void WriteAggregateTypeEqual(IndentedStringBuilder builder, FieldsDefinition definition)
         {
             // All fields are optional in messages.
-            bool fieldsOptional = definition.Kind == AggregateKind.Message;
+            bool fieldsOptional = definition is MessageDefinition;
 
             builder.AppendLine($"func (v1 {StyleName(definition.Name)}) Equal(v2 {StyleName(definition.Name)}) bool {{");
             builder.Indent(IndentChars);
@@ -903,7 +907,7 @@ namespace Core.Generators.Go
 
         private bool IsEnum(DefinedType dt)
         {
-            return Schema.Definitions[dt.Name].Kind == AggregateKind.Enum;
+            return Schema.Definitions[dt.Name] is EnumDefinition;
         }
 
         private string FieldEncodeString(TypeBase type, string fieldName)
