@@ -1,5 +1,7 @@
 // +build !386,!amd64,!arm,!arm64
 
+package bebop
+
 // WriteUInt16 writes a uint16 value.
 func WriteUInt16(out []byte, value uint16) []byte {
 	return append(out, byte(value>>0), byte(value>>8))

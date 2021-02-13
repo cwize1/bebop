@@ -19,6 +19,7 @@ namespace Core.Generators.Go
         private Dictionary<string, NamelessTypeInfo> _NamelessTypes = new Dictionary<string, NamelessTypeInfo>();
 
         private bool _GuidTypeUsed = false;
+        private bool _FmtModuleRequired = false;
 
         public GoGenerator(ISchema schema) :
             base(schema)
@@ -44,6 +45,12 @@ namespace Core.Generators.Go
 
             builder.AppendLine("import (");
             builder.Indent(IndentChars);
+
+            if (_FmtModuleRequired)
+            {
+                builder.AppendLine("\"fmt\"");
+                builder.AppendLine();
+            }
 
             builder.AppendLine("\"github.com/RainwayApp/bebop/Runtime/Go/bebop\"");
 
@@ -88,6 +95,9 @@ namespace Core.Generators.Go
                     {
                         PreprocessTypes(field.Type);
                     }
+                    break;
+                case UnionDefinition _:
+                    _FmtModuleRequired = true;
                     break;
                 }
             }
@@ -206,6 +216,10 @@ namespace Core.Generators.Go
             case FieldsDefinition fieldsDefinition:
                 WriteAggregateTypeDefinition(builder, fieldsDefinition);
                 break;
+
+            case UnionDefinition unionDefinition:
+                WriteUnionTypeDefinition(builder, unionDefinition);
+                break;
             }
         }
 
@@ -259,6 +273,12 @@ namespace Core.Generators.Go
                 WriteMessageEncode(builder, messageDefinition);
                 WriteMessageDecode(builder, messageDefinition);
                 WriteAggregateTypeEqual(builder, messageDefinition);
+                break;
+
+            case UnionDefinition unionDefinition:
+                WriteUnionEncode(builder, unionDefinition);
+                WriteUnionDecode(builder, unionDefinition);
+                WriteUnionEqual(builder, unionDefinition);
                 break;
 
             default:
@@ -454,7 +474,7 @@ namespace Core.Generators.Go
         ///                     return in, err
         ///                 }
         ///             case 3:
-        ///                 in, err = v.ThirdField.Decode(out)
+        ///                 in, err = v.ThirdField.Decode(in)
         ///                 if err != nil {
         ///                     return in, err
         ///                 }
@@ -537,19 +557,259 @@ namespace Core.Generators.Go
             builder.AppendLine($"func (v1 {StyleName(definition.Name)}) Equal(v2 {StyleName(definition.Name)}) bool {{");
             builder.Indent(IndentChars);
 
-            StringBuilder sb = new StringBuilder();
-            sb.Append("return ");
-
-            IField field0 = definition.Fields.First();
-            sb.Append(FieldEqualString(field0.Type, $"v1.{StyleName(field0.Name)}", $"v2.{StyleName(field0.Name)}", fieldsOptional));
-
-            foreach (IField field in definition.Fields.Skip(1))
+            if (definition.Fields.Count <= 0)
             {
-                sb.Append(" &&\n\t");
-                sb.Append(FieldEqualString(field.Type, $"v1.{StyleName(field.Name)}", $"v2.{StyleName(field.Name)}", fieldsOptional));
+                builder.AppendLine("return true");
+            }
+            else
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append("return ");
+
+                IField field0 = definition.Fields.First();
+                sb.Append(FieldEqualString(field0.Type, $"v1.{StyleName(field0.Name)}", $"v2.{StyleName(field0.Name)}", fieldsOptional));
+
+                foreach (IField field in definition.Fields.Skip(1))
+                {
+                    sb.Append(" &&\n\t");
+                    sb.Append(FieldEqualString(field.Type, $"v1.{StyleName(field.Name)}", $"v2.{StyleName(field.Name)}", fieldsOptional));
+                }
+
+                builder.AppendLine(sb.ToString());
             }
 
-            builder.AppendLine(sb.ToString());
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     type SomeUnionType struct {
+        ///         // Supported types: AType, AnotherType
+        ///         Value interface{}
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteUnionTypeDefinition(IndentedStringBuilder builder, UnionDefinition definition)
+        {
+            string typename = StyleName(definition.Name);
+
+            string supportedTypes = string.Join(", ", definition.Branches.Select(branch => StyleName(branch.Definition.Name)));
+
+            WriteDocumentation(builder, definition.Documentation, null);
+            builder.AppendLine($"type {typename} struct {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("// Supported types: " + supportedTypes);
+            builder.AppendLine("Value interface{}");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func (v *SomeUnionType) Encode(out []byte) []byte {
+        ///         var lengthPlaceholder int 
+        ///         lengthPlaceholder, out = bebop.WriteMessageLengthPlaceholder(out)
+        ///         switch u := v.Value.(type) {
+        ///         case AType:
+        ///             out = bebop.WriteByte(out, 1)
+        ///             out = u.Encode(out)
+        ///         case AnotherType:
+        ///             out = bebop.WriteByte(out, 5)
+        ///             out = u.Encode(out)
+        ///         default:
+        ///             panic(fmt.Sprintf("SomeUnionType contains a non-supported type: %T", v))
+        ///         }
+        ///         bebop.WriteMessageLength(out, lengthPlaceholder)
+        ///         return out
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteUnionEncode(IndentedStringBuilder builder, UnionDefinition definition)
+        {
+            string typename = StyleName(definition.Name);
+            builder.AppendLine($"func (v *{StyleName(definition.Name)}) Encode(out []byte) []byte {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("var lengthPlaceholder int");
+            builder.AppendLine("lengthPlaceholder, out = bebop.WriteMessageLengthPlaceholder(out)");
+            builder.AppendLine("switch u := v.Value.(type) {");
+
+            foreach (UnionBranch branch in definition.Branches)
+            {
+                var branchDefinitionAsDT = new DefinedType(branch.Definition.Name, branch.Definition.Span, "");
+
+                builder.AppendLine($"case {StyleName(branch.Definition.Name)}:");
+                builder.Indent(IndentChars);
+
+                builder.AppendLine($"out = bebop.WriteByte(out, {branch.Discriminator})");
+                builder.AppendLine(FieldEncodeString(branchDefinitionAsDT, "u"));
+
+                builder.Dedent(IndentChars);
+            }
+
+            builder.AppendLine("default:");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine($"panic(fmt.Sprintf(\"{typename} contains a non-supported type: %T\", v))");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine("bebop.WriteMessageLength(out, lengthPlaceholder)");
+            builder.AppendLine("return out");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func (v *SomeUnionType) Decode(in []byte) ([]byte, error) {
+        ///         var err error
+        ///         var messageLength int
+        ///         messageLength, in, err = bebop.ReadMessageLength(in)
+        ///         if err != nil {
+        ///             return in, err
+        ///         }
+        ///         bodyStart := in
+        ///         var tag byte
+        ///         tag, in, err = bebop.ReadByte(in)
+        ///         if err != nil {
+        ///             return in, err
+        ///         }
+        ///         switch tag {
+        ///         case 1:
+        ///             u := new(AType)
+        ///             in, err = u.Decode(in)
+        ///             if err != nil {
+        ///                 return in, err
+        ///             }
+        ///             v = u
+        ///         case 5:
+        ///             u := new(AnotherType)
+        ///             in, err = u.Decode(in)
+        ///             if err != nil {
+        ///                 return in, err
+        ///             }
+        ///             v = u
+        ///         }
+        ///         if len(bodyStart) - len(in) > messageLength {
+        ///             return in, bebop.ErrMessageBodyOverrun
+        ///         }
+        ///         in = bodyStart[messageLength:]
+        ///         return in, nil
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteUnionDecode(IndentedStringBuilder builder, UnionDefinition definition)
+        {
+            string typename = StyleName(definition.Name);
+
+            builder.AppendLine($"func (v *{typename}) Decode(in []byte) ([]byte, error) {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("var err error");
+            builder.AppendLine("var messageLength int");
+            builder.AppendLine("messageLength, in, err = bebop.ReadMessageLength(in)");
+            builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+            builder.AppendLine("bodyStart := in");
+
+            builder.AppendLine("var tag byte");
+            builder.AppendLine("tag, in, err = bebop.ReadByte(in)");
+            builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+            builder.AppendLine("switch tag {");
+
+            foreach (UnionBranch branch in definition.Branches)
+            {
+                var branchDefinitionAsDT = new DefinedType(branch.Definition.Name, branch.Definition.Span, "");
+
+                builder.AppendLine($"case {branch.Discriminator}:");
+                builder.Indent(IndentChars);
+
+                builder.AppendLine($"u := new({StyleName(branch.Definition.Name)})");
+                builder.AppendLine(FieldDecodeString(branchDefinitionAsDT, "u"));
+                builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+                builder.AppendLine($"v.Value = u");
+
+                builder.Dedent(IndentChars);
+            }
+
+            builder.AppendLine("}");
+
+            builder.AppendLine("if len(bodyStart)-len(in) > messageLength {");
+            builder.AppendLine("\treturn in, bebop.ErrMessageBodyOverrun");
+            builder.AppendLine("}");
+
+            builder.AppendLine("in = bodyStart[messageLength:]");
+            builder.AppendLine("return in, nil");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
+            builder.AppendLine();
+        }
+
+        /// <summary>
+        /// Example output:
+        ///
+        ///     func (v1 SomeUnionType) Equal(v2 SomeUnionType) bool {
+        ///         switch u1 := v1.Value.(type) {
+        ///         case AType:
+        ///             u2, ok := v2.Value.(AType)
+        ///             if !ok {
+        ///                 return false
+        ///             }
+        ///             return u1.Equals(u2)
+        ///         case AnotherType:
+        ///             u2, ok := v2.Value.(AnotherType)
+        ///             if !ok {
+        ///                 return false
+        ///             }
+        ///             return u1.Equals(u2)
+        ///         default:
+        ///             return false
+        ///         }
+        ///     }
+        ///     
+        /// </summary>
+        private void WriteUnionEqual(IndentedStringBuilder builder, UnionDefinition definition)
+        {
+            string typename = StyleName(definition.Name);
+
+            builder.AppendLine($"func (v1 {typename}) Equal(v2 {typename}) bool {{");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine("switch u1 := v1.Value.(type) {");
+
+            foreach (UnionBranch branch in definition.Branches)
+            {
+                string branchTypename = StyleName(branch.Definition.Name);
+                var branchDefinitionAsDT = new DefinedType(branch.Definition.Name, branch.Definition.Span, "");
+
+                builder.AppendLine($"case {branchTypename}:");
+                builder.Indent(IndentChars);
+
+                builder.AppendLine($"u2, ok := v2.Value.({branchTypename})");
+                builder.AppendLine("if !ok {\n\treturn false\n}");
+                builder.AppendLine($"return {FieldEqualString(branchDefinitionAsDT, "u1", "u2")}");
+
+                builder.Dedent(IndentChars);
+            }
+
+            builder.AppendLine($"default:");
+            builder.Indent(IndentChars);
+
+            builder.AppendLine($"return false");
+
+            builder.Dedent(IndentChars);
+            builder.AppendLine("}");
 
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
@@ -834,7 +1094,7 @@ namespace Core.Generators.Go
         ///
         ///   // A comment describing SomeType.
         ///   //
-        //    // Deprecated: SomeType is no longer supported.
+        ///   // Deprecated: SomeType is no longer supported.
         /// </summary>
         private void WriteDocumentation(IndentedStringBuilder builder, string? documentation, string? deprecatedMessage)
         {
@@ -851,9 +1111,9 @@ namespace Core.Generators.Go
             }
 
             if (hasDoc && isDeprecated)
-            {
-                builder.AppendLine($"//");
-            }
+                {
+                    builder.AppendLine($"//");
+                }
 
             if (isDeprecated)
             {
