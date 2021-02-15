@@ -376,12 +376,15 @@ namespace Core.Generators.Go
             builder.AppendLine($"func (v *{StyleName(definition.Name)}) Decode(in []byte) ([]byte, error) {{");
             builder.Indent(IndentChars);
 
-            builder.AppendLine("var err error");
-
-            foreach (IField field in definition.Fields)
+            if (definition.Fields.Count > 0)
             {
-                builder.AppendLine(FieldDecodeString(field.Type, $"v.{StyleName(field.Name)}"));
-                builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+                builder.AppendLine("var err error");
+
+                foreach (IField field in definition.Fields)
+                {
+                    builder.AppendLine(FieldDecodeString(field.Type, $"v.{StyleName(field.Name)}"));
+                    builder.AppendLine("if err != nil {\n\treturn in, err\n}");
+                }
             }
 
             builder.AppendLine("return in, nil");
@@ -624,7 +627,7 @@ namespace Core.Generators.Go
         ///             out = bebop.WriteByte(out, 5)
         ///             out = u.Encode(out)
         ///         default:
-        ///             panic(fmt.Sprintf("SomeUnionType contains a non-supported type: %T", v))
+        ///             panic(fmt.Sprintf("SomeUnionType contains a non-supported type: %T", v.Value))
         ///         }
         ///         bebop.WriteMessageLength(out, lengthPlaceholder)
         ///         return out
@@ -657,7 +660,7 @@ namespace Core.Generators.Go
             builder.AppendLine("default:");
             builder.Indent(IndentChars);
 
-            builder.AppendLine($"panic(fmt.Sprintf(\"{typename} contains a non-supported type: %T\", v))");
+            builder.AppendLine($"panic(fmt.Sprintf(\"{typename} contains a non-supported type: %T\", v.Value))");
 
             builder.Dedent(IndentChars);
             builder.AppendLine("}");
@@ -687,19 +690,19 @@ namespace Core.Generators.Go
         ///         }
         ///         switch tag {
         ///         case 1:
-        ///             u := new(AType)
+        ///             u := AType{}
         ///             in, err = u.Decode(in)
         ///             if err != nil {
         ///                 return in, err
         ///             }
-        ///             v = u
+        ///             v.Value = u
         ///         case 5:
-        ///             u := new(AnotherType)
+        ///             u := AnotherType{}
         ///             in, err = u.Decode(in)
         ///             if err != nil {
         ///                 return in, err
         ///             }
-        ///             v = u
+        ///             v.Value = u
         ///         }
         ///         if len(bodyStart) - len(in) > messageLength {
         ///             return in, bebop.ErrMessageBodyOverrun
@@ -734,7 +737,7 @@ namespace Core.Generators.Go
                 builder.AppendLine($"case {branch.Discriminator}:");
                 builder.Indent(IndentChars);
 
-                builder.AppendLine($"u := new({StyleName(branch.Definition.Name)})");
+                builder.AppendLine($"u := {StyleName(branch.Definition.Name)}{{}}");
                 builder.AppendLine(FieldDecodeString(branchDefinitionAsDT, "u"));
                 builder.AppendLine("if err != nil {\n\treturn in, err\n}");
                 builder.AppendLine($"v.Value = u");

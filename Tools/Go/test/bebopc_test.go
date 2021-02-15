@@ -139,6 +139,34 @@ func TestEncodeDecodeEqual(t *testing.T) {
 			uuid.New(): {},
 		},
 	})
+	testEncodeDecodeEqual(t, &other.U{
+		Value: other.A{
+			A: (func() *uint32 { tmp := uint32(10); return &tmp })(),
+		},
+	})
+	testEncodeDecodeEqual(t, &other.U{
+		Value: other.B{
+			B: true,
+		},
+	})
+	testEncodeDecodeEqual(t, &other.U{
+		Value: other.C{},
+	})
+	testEncodeDecodeEqual(t, &other.U{
+		Value: other.W{
+			other.D{
+				S: "U",
+			},
+		},
+	})
+	testEncodeDecodeEqual(t, &other.List{
+		Value: other.Cons{
+			Head: 12,
+			Tail: other.List{
+				Value: other.Nil{},
+			},
+		},
+	})
 }
 
 func invokeMethodByName(methodName string, obj interface{}, args ...interface{}) []interface{} {
